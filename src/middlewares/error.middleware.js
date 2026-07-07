@@ -67,8 +67,8 @@ const errorHandler = (error, req, res, _next) => {
 
   ApiResponse.error(res, {
     statusCode,
-    message: normalizedError.message,
-    details,
+    message: config.isProduction && !normalizedError.isOperational ? 'Internal server error' : normalizedError.message,
+    details: config.isProduction && !normalizedError.isOperational ? null : details,
     stack: config.isProduction ? null : normalizedError.stack,
   });
 };

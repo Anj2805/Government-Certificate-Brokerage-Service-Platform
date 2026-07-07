@@ -3,12 +3,12 @@ const authController = require('./auth.controller');
 const authValidation = require('./auth.validation');
 const authenticate = require('../../middlewares/auth.middleware');
 const validateRequest = require('../../middlewares/validate-request.middleware');
-const { forgotPasswordLimiter, resendVerificationLimiter } = require('./auth.rate-limit');
+const { authLimiter, forgotPasswordLimiter, resendVerificationLimiter } = require('./auth.rate-limit');
 
 const router = Router();
 
-router.post('/register', validateRequest(authValidation.register), authController.register);
-router.post('/login', validateRequest(authValidation.login), authController.login);
+router.post('/register', authLimiter, validateRequest(authValidation.register), authController.register);
+router.post('/login', authLimiter, validateRequest(authValidation.login), authController.login);
 router.post('/refresh-token', validateRequest(authValidation.refreshToken), authController.refreshToken);
 router.post(
   '/forgot-password',

@@ -6,7 +6,9 @@ const logger = require('../config/logger');
 morgan.token('id', (req) => req.id);
 
 const assignRequestId = (req, res, next) => {
-  req.id = req.headers['x-request-id'] || crypto.randomUUID();
+  const clientReqId = req.headers['x-request-id'];
+  const uuidRegex = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
+  req.id = (clientReqId && uuidRegex.test(clientReqId)) ? clientReqId : crypto.randomUUID();
   res.setHeader('x-request-id', req.id);
   next();
 };

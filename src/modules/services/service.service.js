@@ -6,14 +6,25 @@ const serviceRepository = require('./service.repository');
 const DEFAULT_PAGE = 1;
 const DEFAULT_LIMIT = 10;
 
-const normalizeServicePayload = (payload) => ({
-  ...payload,
-  name: payload.name?.trim(),
-  category: payload.category?.trim().toLowerCase(),
-  requiredDocuments: payload.requiredDocuments?.map((document) => document.trim()),
-  estimatedProcessingDays: payload.estimatedProcessingDays || payload.estimatedTime,
-  estimatedTime: undefined,
-});
+const normalizeServicePayload = (payload) => {
+  const allowed = {};
+  const fields = ['name', 'description', 'category', 'requiredDocuments', 'estimatedProcessingDays', 'estimatedTime', 'serviceCharge', 'isActive'];
+
+  fields.forEach(field => {
+    if (payload[field] !== undefined) {
+      allowed[field] = payload[field];
+    }
+  });
+
+  return {
+    ...allowed,
+    name: allowed.name?.trim(),
+    category: allowed.category?.trim().toLowerCase(),
+    requiredDocuments: allowed.requiredDocuments?.map((document) => document.trim()),
+    estimatedProcessingDays: allowed.estimatedProcessingDays || allowed.estimatedTime,
+    estimatedTime: undefined,
+  };
+};
 
 const ensureUniqueNameInCategory = async ({ name, category, currentServiceId = null }) => {
   if (!name || !category) {

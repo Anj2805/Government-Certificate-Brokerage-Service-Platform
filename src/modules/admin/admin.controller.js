@@ -1,6 +1,7 @@
 const ApiResponse = require('../../common/responses/api-response');
 const asyncHandler = require('../../utils/async-handler');
 const adminService = require('./admin.service');
+const logger = require('../../config/logger');
 
 const getDashboardMetrics = asyncHandler(async (_req, res) => {
   const metrics = await adminService.getDashboardMetrics();
@@ -29,6 +30,8 @@ const listAgents = asyncHandler(async (req, res) => {
 const approveAgent = asyncHandler(async (req, res) => {
   const agent = await adminService.approveAgent(req.params.id, req.user);
 
+  logger.info({ audit: true, eventType: 'AGENT_APPROVED', adminId: req.user.id, targetAgentId: req.params.id, requestId: req.id }, 'Agent approved');
+
   return ApiResponse.success(res, {
     message: 'Agent approved successfully',
     data: { agent },
@@ -38,6 +41,8 @@ const approveAgent = asyncHandler(async (req, res) => {
 const rejectAgent = asyncHandler(async (req, res) => {
   const agent = await adminService.rejectAgent(req.params.id, req.body.reason, req.user);
 
+  logger.info({ audit: true, eventType: 'AGENT_REJECTED', adminId: req.user.id, targetAgentId: req.params.id, requestId: req.id }, 'Agent rejected');
+
   return ApiResponse.success(res, {
     message: 'Agent rejected successfully',
     data: { agent },
@@ -46,6 +51,8 @@ const rejectAgent = asyncHandler(async (req, res) => {
 
 const suspendAgent = asyncHandler(async (req, res) => {
   const agent = await adminService.suspendAgent(req.params.id, req.body.reason, req.user);
+
+  logger.info({ audit: true, eventType: 'AGENT_SUSPENDED', adminId: req.user.id, targetAgentId: req.params.id, requestId: req.id }, 'Agent suspended');
 
   return ApiResponse.success(res, {
     message: 'Agent suspended successfully',

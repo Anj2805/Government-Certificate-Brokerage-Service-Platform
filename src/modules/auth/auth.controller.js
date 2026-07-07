@@ -2,9 +2,12 @@ const httpStatus = require('http-status');
 const ApiResponse = require('../../common/responses/api-response');
 const asyncHandler = require('../../utils/async-handler');
 const authService = require('./auth.service');
+const logger = require('../../config/logger');
 
 const register = asyncHandler(async (req, res) => {
   const data = await authService.register(req.body);
+
+  logger.info({ audit: true, eventType: 'REGISTER_SUCCESS', email: req.body.email, requestId: req.id }, 'User registered successfully');
 
   return ApiResponse.success(res, {
     statusCode: httpStatus.CREATED,
@@ -15,6 +18,8 @@ const register = asyncHandler(async (req, res) => {
 
 const login = asyncHandler(async (req, res) => {
   const data = await authService.login(req.body);
+
+  logger.info({ audit: true, eventType: 'LOGIN_SUCCESS', email: req.body.email, requestId: req.id }, 'User logged in successfully');
 
   return ApiResponse.success(res, {
     message: 'User logged in successfully',
@@ -42,6 +47,8 @@ const refreshToken = asyncHandler(async (req, res) => {
 
 const logout = asyncHandler(async (req, res) => {
   await authService.logout(req.user.id);
+
+  logger.info({ audit: true, eventType: 'LOGOUT_SUCCESS', userId: req.user.id, requestId: req.id }, 'User logged out');
 
   return ApiResponse.success(res, {
     message: 'User logged out successfully',

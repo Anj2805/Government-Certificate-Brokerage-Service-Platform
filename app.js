@@ -13,8 +13,8 @@ app.set('trust proxy', 1);
 
 securityMiddleware(app);
 
-app.use(express.json({ limit: config.requestBodyLimit }));
-app.use(express.urlencoded({ extended: true, limit: config.requestBodyLimit }));
+app.use(express.json({ limit: config.jsonBodyLimit }));
+app.use(express.urlencoded({ extended: true, limit: config.urlencodedBodyLimit }));
 app.use(securityMiddleware.afterBodyParser);
 app.use(requestLogger);
 app.use('/api-docs', swaggerMiddleware.serve, swaggerMiddleware.setup);

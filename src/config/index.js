@@ -42,7 +42,8 @@ module.exports = {
   isProduction: process.env.NODE_ENV === 'production',
   appName: process.env.APP_NAME || 'Government Certificate Brokerage Service',
   port: parseNumber(process.env.PORT, 5000),
-  requestBodyLimit: process.env.REQUEST_BODY_LIMIT || '10kb',
+  jsonBodyLimit: process.env.JSON_BODY_LIMIT || '10kb',
+  urlencodedBodyLimit: process.env.URLENCODED_BODY_LIMIT || '10kb',
   api: {
     version: apiVersion,
     basePath: `/api/${apiVersion}`,
