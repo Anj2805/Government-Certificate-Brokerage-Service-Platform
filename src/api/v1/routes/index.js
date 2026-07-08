@@ -8,6 +8,7 @@ const agentRoutes = require('../../../modules/agents/agent.routes');
 const adminRoutes = require('../../../modules/admin/admin.routes');
 const userRoutes = require('../../../modules/users/user.routes');
 const notificationRoutes = require('../../../modules/notifications/notification.routes');
+const certificateRoutes = require('../../../modules/certificates/certificate.routes');
 
 const router = Router();
 
@@ -20,5 +21,6 @@ router.use('/agents', agentRoutes);
 router.use('/admin', adminRoutes);
 router.use('/users', userRoutes);
 router.use('/notifications', notificationRoutes);
+router.use('/certificates', certificateRoutes);
 
 module.exports = router;

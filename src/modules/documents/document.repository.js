@@ -31,9 +31,16 @@ const findPaginated = async ({ query, page, limit }) => {
 
 const save = (document) => document.save();
 
+const countDocuments = (query) => Document.countDocuments(query);
+const find = (query) => Document.find(query);
+const findOne = (query) => Document.findOne(query);
+
 module.exports = {
   create,
   findById,
   findPaginated,
   save,
+  countDocuments,
+  find,
+  findOne,
 };

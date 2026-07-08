@@ -1,7 +1,8 @@
 const DocumentStatus = Object.freeze({
   PENDING: 'pending',
-  VERIFIED: 'verified',
+  ACCEPTED: 'accepted',
   REJECTED: 'rejected',
+  SUPERSEDED: 'superseded',
 });
 
 module.exports = DocumentStatus;

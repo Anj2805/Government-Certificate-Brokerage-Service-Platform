@@ -8,11 +8,28 @@ const uploadDocument = asyncHandler(async (req, res) => {
     file: req.file,
     payload: req.body,
     user: req.user,
+    reqId: req.id,
   });
 
   return ApiResponse.success(res, {
     statusCode: httpStatus.CREATED,
     message: 'Document uploaded successfully',
+    data: { document },
+  });
+});
+
+const replaceDocument = asyncHandler(async (req, res) => {
+  const document = await documentService.replaceDocument({
+    replacedDocumentId: req.params.id,
+    file: req.file,
+    payload: req.body,
+    user: req.user,
+    reqId: req.id,
+  });
+
+  return ApiResponse.success(res, {
+    statusCode: httpStatus.CREATED,
+    message: 'Document replaced successfully',
     data: { document },
   });
 });
@@ -41,11 +58,11 @@ const getDocumentMetadata = asyncHandler(async (req, res) => {
   });
 });
 
-const verifyDocument = asyncHandler(async (req, res) => {
-  const document = await documentService.verifyDocument(req.params.id, req.user.id);
+const acceptDocument = asyncHandler(async (req, res) => {
+  const document = await documentService.acceptDocument(req.params.id, req.user, req.id);
 
   return ApiResponse.success(res, {
-    message: 'Document verified successfully',
+    message: 'Document accepted successfully',
     data: { document },
   });
 });
@@ -54,7 +71,8 @@ const rejectDocument = asyncHandler(async (req, res) => {
   const document = await documentService.rejectDocument(
     req.params.id,
     req.body.rejectionReason,
-    req.user.id,
+    req.user,
+    req.id
   );
 
   return ApiResponse.success(res, {
@@ -72,11 +90,23 @@ const deleteDocument = asyncHandler(async (req, res) => {
   });
 });
 
+const downloadDocument = asyncHandler(async (req, res) => {
+  const { document, physicalPath } = await documentService.downloadDocument(req.params.id, req.user);
+
+  res.setHeader('Content-Type', document.mimeType || 'application/octet-stream');
+  res.setHeader('Content-Disposition', `attachment; filename="${document.originalName}"`);
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+
+  res.sendFile(physicalPath);
+});
+
 module.exports = {
   deleteDocument,
   getDocumentMetadata,
   listDocuments,
   rejectDocument,
   uploadDocument,
-  verifyDocument,
+  acceptDocument,
+  downloadDocument,
+  replaceDocument,
 };

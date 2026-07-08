@@ -15,6 +15,7 @@ const rolePermissions = Object.freeze({
     Permissions.REQUEST_UPDATE_STATUS,
     Permissions.DOCUMENT_UPLOAD,
     Permissions.DOCUMENT_VIEW,
+    Permissions.DOCUMENT_VERIFY,
   ]),
   [UserRoles.ADMIN]: Object.freeze([
     Permissions.SERVICE_CREATE,

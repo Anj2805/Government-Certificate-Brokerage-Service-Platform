@@ -18,6 +18,15 @@ router.post(
   documentController.uploadDocument,
 );
 
+router.post(
+  '/:id/replace',
+  authenticate,
+  authorizePermission(Permissions.DOCUMENT_UPLOAD),
+  uploadSingleDocument('document'),
+  validateRequest(documentValidation.getDocument),
+  documentController.replaceDocument,
+);
+
 router.get(
   '/',
   authenticate,
@@ -35,11 +44,11 @@ router.get(
 );
 
 router.patch(
-  '/:id/verify',
+  '/:id/accept',
   authenticate,
   authorizePermission(Permissions.DOCUMENT_VERIFY),
-  validateRequest(documentValidation.verifyDocument),
-  documentController.verifyDocument,
+  validateRequest(documentValidation.acceptDocument), // We will update validation next
+  documentController.acceptDocument,
 );
 
 router.patch(
@@ -53,9 +62,17 @@ router.patch(
 router.delete(
   '/:id',
   authenticate,
-  authorizePermission(Permissions.DOCUMENT_VIEW),
+  authorizePermission(Permissions.DOCUMENT_VIEW), // Only Citizen uses this, policy is enforced in service
   validateRequest(documentValidation.deleteDocument),
   documentController.deleteDocument,
+);
+
+router.get(
+  '/:id/download',
+  authenticate,
+  authorizePermission(Permissions.DOCUMENT_VIEW),
+  validateRequest(documentValidation.getDocument),
+  documentController.downloadDocument,
 );
 
 module.exports = router;

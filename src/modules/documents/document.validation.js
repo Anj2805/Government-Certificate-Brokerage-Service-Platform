@@ -40,7 +40,7 @@ const listDocuments = [
   query('status')
     .optional({ nullable: true, checkFalsy: true })
     .isIn(Object.values(DocumentStatus))
-    .withMessage('status must be pending, verified, or rejected'),
+    .withMessage('status must be pending, accepted, rejected, or superseded'),
   query('documentType')
     .optional({ nullable: true, checkFalsy: true })
     .trim()
@@ -68,7 +68,7 @@ const listDocuments = [
 
 const getDocument = mongoIdParam;
 const deleteDocument = mongoIdParam;
-const verifyDocument = mongoIdParam;
+const acceptDocument = mongoIdParam;
 
 const rejectDocument = [
   ...mongoIdParam,
@@ -84,5 +84,5 @@ module.exports = {
   listDocuments,
   rejectDocument,
   uploadDocument,
-  verifyDocument,
+  acceptDocument,
 };

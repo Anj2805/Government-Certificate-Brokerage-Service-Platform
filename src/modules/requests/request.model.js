@@ -73,6 +73,10 @@ const requestSchema = new mongoose.Schema(
         type: Number,
         required: true,
       },
+      requiredDocuments: {
+        type: [String],
+        default: [],
+      },
     },
     assignedAgent: {
       type: mongoose.Schema.Types.ObjectId,

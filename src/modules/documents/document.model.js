@@ -56,11 +56,6 @@ const documentSchema = new mongoose.Schema(
       required: true,
       index: true,
     },
-    assignedAgent: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'User',
-      index: true,
-    },
     request: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Request',
@@ -100,18 +95,52 @@ const documentSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
     },
+    hash: {
+      type: String,
+      required: true,
+      index: true,
+    },
+    isSuperseded: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
+    replacedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Document',
+    },
+    replacedAt: {
+      type: Date,
+    },
+    reviewHistory: [
+      {
+        status: { type: String, enum: Object.values(DocumentStatus), required: true },
+        reviewer: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+        reason: { type: String, maxlength: 500 },
+        reviewedAt: { type: Date, default: Date.now },
+      }
+    ],
   },
   {
     timestamps: true,
-    versionKey: false,
+    optimisticConcurrency: true,
+    versionKey: '__v',
     toJSON: {
       transform(_doc, ret) {
         delete ret.path;
+        delete ret.hash;
         return ret;
       },
     },
   },
 );
+
+documentSchema.pre('save', function (next) {
+  if (!this.isNew && this.isModified()) {
+    this.increment();
+  }
+  next();
+});
 
 documentSchema.index({ ownerUser: 1, deletedAt: 1, createdAt: -1 });
 documentSchema.index({ assignedAgent: 1, deletedAt: 1, createdAt: -1 });

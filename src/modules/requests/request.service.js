@@ -2,6 +2,7 @@ const httpStatus = require('http-status');
 const ApiError = require('../../common/errors/api-error');
 const AgentStatus = require('../../common/enums/agent-status.enum');
 const RequestStatus = require('../../common/enums/request-status.enum');
+const DocumentStatus = require('../../common/enums/document-status.enum');
 const UserRoles = require('../../common/enums/user-roles.enum');
 const { generateRequestNumber } = require('../../common/utils/request-number.util');
 const Document = require('../documents/document.model');
@@ -183,6 +184,7 @@ const createRequest = async (payload, user, reqId) => {
       category: service.category,
       estimatedProcessingDays: service.estimatedProcessingDays,
       serviceCharge: service.serviceCharge,
+      requiredDocuments: service.requiredDocuments || [],
     },
     status: initialStatus,
     applicationData: payload.applicationData || {},
@@ -202,6 +204,14 @@ const createRequest = async (payload, user, reqId) => {
   });
 
   logger.info({ audit: true, eventType: 'APPLICATION_DRAFT_CREATED', requestId: reqId, actorId: user.id, role: user.role, applicationNumber: request.requestNumber }, 'Draft application created');
+
+  // Update documents to link them to this request
+  if (request.documents && request.documents.length > 0) {
+    await Document.updateMany(
+      { _id: { $in: request.documents } },
+      { $set: { request: request._id } }
+    );
+  }
 
   return request;
 };
@@ -226,6 +236,13 @@ const updateDraft = async (requestId, payload, user, reqId) => {
 
   const savedRequest = await requestRepository.save(request);
   logger.info({ audit: true, eventType: 'APPLICATION_UPDATED', requestId: reqId, actorId: user.id, role: user.role, applicationNumber: request.requestNumber }, 'Application draft updated');
+
+  if (payload.documents && payload.documents.length > 0) {
+    await Document.updateMany(
+      { _id: { $in: payload.documents } },
+      { $set: { request: savedRequest._id } }
+    );
+  }
 
   return savedRequest;
 };
@@ -417,9 +434,31 @@ const approveRequest = async (requestId, user, reason, reqId) => {
   if (!request) throw new ApiError(httpStatus.NOT_FOUND, 'Request not found');
   ensureRequestAccess(request, user);
 
+  // Phase 8: Evaluate document requirements
+  const requiredDocs = request.serviceSnapshot?.requiredDocuments || [];
+  const activeDocuments = await Document.find({
+    request: requestId,
+    isSuperseded: false,
+    deletedAt: null,
+  });
+
+  for (const docType of requiredDocs) {
+    const doc = activeDocuments.find(d => d.documentType === docType);
+    if (!doc) {
+      throw new ApiError(httpStatus.CONFLICT, `Cannot approve: Required document missing (${docType})`);
+    }
+    if (doc.status !== DocumentStatus.ACCEPTED) {
+      throw new ApiError(httpStatus.CONFLICT, `Cannot approve: Required document ${docType} is not accepted (current status: ${doc.status})`);
+    }
+  }
+
   transitionRequest(request, RequestStatus.COMPLETED, user, reason || 'Application approved');
 
   const savedRequest = await requestRepository.save(request);
+
+  // Phase 8: Issue certificate idempotently
+  const certificateService = require('../certificates/certificate.service');
+  await certificateService.issueCertificate(savedRequest._id, reqId);
 
   await notificationService.createRequestNotification({
     recipientId: savedRequest.citizen,
