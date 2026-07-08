@@ -1,17 +1,18 @@
-import { useState } from 'react';
-
-const INITIAL_REQUESTS = [
-  { id: "REQ-2024-9105", citizenName: "Anjali Sinha", serviceType: "Caste Certificate", status: "In Progress", dateAssigned: "Nov 02, 2023", priority: "High" },
-  { id: "REQ-2024-9211", citizenName: "Anil Deshmukh", serviceType: "Birth Certificate", status: "Assigned", dateAssigned: "Nov 15, 2023", priority: "Standard" },
-  { id: "REQ-2024-9350", citizenName: "Sunita Verma", serviceType: "Domicile Certificate", status: "Documents Required", dateAssigned: "Dec 01, 2023", priority: "Urgent" },
-  { id: "REQ-2024-9488", citizenName: "Vikram Singh", serviceType: "PAN Card Update", status: "Submitted", dateAssigned: "Dec 10, 2023", priority: "Standard" },
-  { id: "REQ-2024-8842", citizenName: "Rajesh Kumar", serviceType: "Income Certificate", status: "Completed", dateAssigned: "Oct 12, 2023", priority: "Standard" },
-  { id: "REQ-2024-9543", citizenName: "Neha Gupta", serviceType: "Gas Connection", status: "In Progress", dateAssigned: "Dec 20, 2023", priority: "Standard" },
-  { id: "REQ-2024-9602", citizenName: "Amit Kumar", serviceType: "Ration Card Issue", status: "Completed", dateAssigned: "Jan 02, 2024", priority: "High" }
-];
+import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
+import { agentApi } from '../../api/agentApi';
+import { useAuth } from '../../hooks/useAuth';
 
 export default function AgentDashboard() {
-  const [requests, setRequests] = useState(INITIAL_REQUESTS);
+  const { user } = useAuth();
+  const [requests, setRequests] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [stats, setStats] = useState({
+    assigned: 0,
+    inProgress: 0,
+    completed: 0,
+    docsRequired: 0
+  });
   
   // Search & Filter state
   const [searchTerm, setSearchTerm] = useState("");
@@ -26,53 +27,80 @@ export default function AgentDashboard() {
   const [uploadedDocName, setUploadedDocName] = useState("");
   const [selectedDocType, setSelectedDocType] = useState("Verification Report");
 
-  // Dynamic Stats Calculations
-  const stats = {
-    assigned: requests.length,
-    inProgress: requests.filter(r => r.status === "In Progress" || r.status === "Assigned").length,
-    completed: requests.filter(r => r.status === "Completed").length,
-    docsRequired: requests.filter(r => r.status === "Documents Required").length
+  // Fetch Data
+  const loadDashboardData = async () => {
+    setIsLoading(true);
+    try {
+      const [statsData, requestsData] = await Promise.all([
+        agentApi.getDashboardStats(),
+        agentApi.listAssignedRequests({ limit: 10 })
+      ]);
+      setStats({
+        assigned: statsData.totalAssignedRequests || 0,
+        inProgress: statsData.inProgressRequests || 0,
+        completed: statsData.completedRequests || 0,
+        docsRequired: statsData.documentsRequiredRequests || 0
+      });
+      setRequests(requestsData.data.requests || []);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const handleUpdateStatusSubmit = (e) => {
+  useEffect(() => {
+    loadDashboardData();
+  }, []);
+
+  const handleUpdateStatusSubmit = async (e) => {
     e.preventDefault();
-    if (!selectedRequestId) return;
-    
-    setRequests(prev => prev.map(req => {
-      if (req.id === selectedRequestId) {
-        return { ...req, status: selectedStatus };
-      }
-      return req;
-    }));
-
-    alert(`Successfully updated request ${selectedRequestId} status to "${selectedStatus}". Note added: "${agentNote || 'None'}"`);
-    
-    // reset
-    setShowStatusModal(false);
-    setAgentNote("");
+    try {
+      await agentApi.updateProgress(selectedRequestId, {
+        status: selectedStatus,
+        reason: agentNote
+      });
+      alert(`Successfully updated request status.`);
+      setShowStatusModal(false);
+      setAgentNote("");
+      loadDashboardData();
+    } catch (err) {
+      alert(err?.response?.data?.message || 'Failed to update status');
+    }
   };
 
-  const handleUploadDocSubmit = (e) => {
+  const handleUploadDocSubmit = async (e) => {
     e.preventDefault();
     if (!selectedRequestId || !uploadedDocName) {
       alert("Please specify a request and choose a verification document file.");
       return;
     }
 
-    alert(`Successfully uploaded "${uploadedDocName}" (${selectedDocType}) for Request ${selectedRequestId}. Document is now registered in the Citizen Gallery.`);
-    
-    // reset
-    setShowUploadModal(false);
-    setUploadedDocName("");
+    try {
+      const fileInput = e.target.querySelector('input[type="file"]');
+      const formData = new FormData();
+      formData.append('document', fileInput.files[0]);
+      formData.append('title', uploadedDocName);
+      formData.append('documentType', selectedDocType);
+
+      await agentApi.uploadAdditionalDocument(selectedRequestId, formData);
+      alert(`Successfully uploaded "${uploadedDocName}"`);
+      setShowUploadModal(false);
+      setUploadedDocName("");
+      loadDashboardData();
+    } catch (err) {
+      alert(err?.response?.data?.message || 'Failed to upload document');
+    }
   };
 
   // Filter requests
   const filteredRequests = requests.filter(req => {
-    const matchesSearch = req.id.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                          req.citizenName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          req.serviceType.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesSearch = req.requestNumber.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                          (req.citizen?.firstName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+                          (req.serviceSnapshot?.serviceName || req.service?.name || '').toLowerCase().includes(searchTerm.toLowerCase());
     
-    const matchesStatus = statusFilter === "All" || req.status === statusFilter;
+    const formattedStatusFilter = statusFilter.toLowerCase().replace(' ', '_');
+    const matchesStatus = statusFilter === "All" || req.status === formattedStatusFilter;
     
     return matchesSearch && matchesStatus;
   });
@@ -88,14 +116,14 @@ export default function AgentDashboard() {
               Service Agent Dashboard
             </h1>
             <p className="text-[14.5px] text-gray-500 font-semibold mt-0.5">
-              Welcome back, Agent Rajesh Kumar. Manage your assigned verifications.
+              Welcome back, Agent {user?.firstName || 'User'}. Manage your assigned verifications.
             </p>
           </div>
 
           <div className="flex gap-2">
             <button
               onClick={() => {
-                setSelectedRequestId(requests[0]?.id || "");
+                setSelectedRequestId(requests[0]?._id || "");
                 setShowStatusModal(true);
               }}
               className="h-11 px-5 rounded-lg bg-[#13448a] hover:bg-[#0c316a] text-[13.5px] font-bold text-white shadow-sm transition-colors flex items-center gap-1.5"
@@ -108,7 +136,7 @@ export default function AgentDashboard() {
             </button>
             <button
               onClick={() => {
-                setSelectedRequestId(requests[0]?.id || "");
+                setSelectedRequestId(requests[0]?._id || "");
                 setShowUploadModal(true);
               }}
               className="h-11 px-5 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 text-[13.5px] font-bold text-gray-700 transition-colors flex items-center gap-1.5 shadow-sm"
@@ -246,46 +274,63 @@ export default function AgentDashboard() {
               <tbody className="divide-y divide-gray-100 text-[13px] font-semibold text-gray-600">
                 {filteredRequests.length > 0 ? (
                   filteredRequests.map((req, idx) => (
-                    <tr key={idx} className="hover:bg-gray-50/30 transition-colors">
-                      <td className="px-6 py-4.5 font-bold text-[#13448a]">{req.id}</td>
-                      <td className="px-6 py-4.5 text-gray-800 font-bold">{req.citizenName}</td>
-                      <td className="px-6 py-4.5">{req.serviceType}</td>
-                      <td className="px-6 py-4.5 text-gray-500 font-semibold">{req.dateAssigned}</td>
+                    <tr key={req._id || idx} className="hover:bg-gray-50/30 transition-colors">
+                      <td className="px-6 py-4.5 font-bold text-[#13448a]">{req.requestNumber}</td>
+                      <td className="px-6 py-4.5 text-gray-800 font-bold">{req.citizen?.firstName} {req.citizen?.lastName}</td>
+                      <td className="px-6 py-4.5">{req.serviceSnapshot?.serviceName || req.service?.name}</td>
+                      <td className="px-6 py-4.5 text-gray-500 font-semibold">
+                        {new Date(req.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                      </td>
                       <td className="px-6 py-4.5">
                         <span className={`inline-flex px-2 py-0.5 rounded text-[10px] font-bold ${
-                          req.priority === "Urgent" 
+                          req.priority === "urgent" 
                             ? "bg-red-50 text-red-750" 
-                            : req.priority === "High" 
+                            : req.priority === "high" 
                               ? "bg-amber-50 text-amber-700" 
                               : "bg-blue-50 text-blue-700"
                         }`}>
-                          {req.priority}
+                          {req.priority || 'standard'}
                         </span>
                       </td>
                       <td className="px-6 py-4.5">
-                        {req.status === "Completed" && (
+                        {req.status === "completed" && (
                           <span className="inline-flex items-center gap-1 text-emerald-700 bg-emerald-50 border border-emerald-100 px-2.5 py-0.5 rounded-full text-[10.5px] font-extrabold">
                             Completed
                           </span>
                         )}
-                        {req.status === "In Progress" && (
+                        {req.status === "in_progress" && (
                           <span className="inline-flex items-center gap-1 text-amber-700 bg-amber-50 border border-amber-100 px-2.5 py-0.5 rounded-full text-[10.5px] font-extrabold">
                             In Progress
                           </span>
                         )}
-                        {req.status === "Assigned" && (
+                        {req.status === "assigned" && (
                           <span className="inline-flex items-center gap-1 text-indigo-700 bg-indigo-50 border border-indigo-100 px-2.5 py-0.5 rounded-full text-[10.5px] font-extrabold">
                             Assigned
                           </span>
                         )}
-                        {req.status === "Documents Required" && (
+                        {req.status === "documents_required" && (
                           <span className="inline-flex items-center gap-1 text-red-700 bg-red-50 border border-red-200 px-2.5 py-0.5 rounded-full text-[10.5px] font-extrabold">
                             Docs Required
                           </span>
                         )}
-                        {req.status === "Submitted" && (
+                        {req.status === "submitted" && (
                           <span className="inline-flex items-center gap-1 text-slate-700 bg-slate-50 border border-slate-200 px-2.5 py-0.5 rounded-full text-[10.5px] font-extrabold">
                             Submitted
+                          </span>
+                        )}
+                        {req.status === "draft" && (
+                          <span className="inline-flex items-center gap-1 text-gray-700 bg-gray-50 border border-gray-200 px-2.5 py-0.5 rounded-full text-[10.5px] font-extrabold">
+                            Draft
+                          </span>
+                        )}
+                        {req.status === "rejected" && (
+                          <span className="inline-flex items-center gap-1 text-red-700 bg-red-50 border border-red-200 px-2.5 py-0.5 rounded-full text-[10.5px] font-extrabold">
+                            Rejected
+                          </span>
+                        )}
+                        {req.status === "cancelled" && (
+                          <span className="inline-flex items-center gap-1 text-red-700 bg-red-50/50 border border-red-250 px-2.5 py-0.5 rounded-full text-[10.5px] font-extrabold">
+                            Cancelled
                           </span>
                         )}
                       </td>
@@ -293,7 +338,7 @@ export default function AgentDashboard() {
                         <button
                           type="button"
                           onClick={() => {
-                            setSelectedRequestId(req.id);
+                            setSelectedRequestId(req._id);
                             setSelectedStatus(req.status);
                             setShowStatusModal(true);
                           }}
@@ -304,7 +349,7 @@ export default function AgentDashboard() {
                         <button
                           type="button"
                           onClick={() => {
-                            setSelectedRequestId(req.id);
+                            setSelectedRequestId(req._id);
                             setShowUploadModal(true);
                           }}
                           className="h-8 px-2.5 rounded border border-[#e2e8f0] hover:border-[#13448a] hover:bg-[#13448a]/5 text-[11.5px] font-bold text-gray-700 hover:text-[#13448a] transition-all"
@@ -347,7 +392,7 @@ export default function AgentDashboard() {
                   className="w-full h-11 px-3.5 rounded-lg border border-gray-200 text-gray-700 focus:ring-2 focus:ring-[#13448a] focus:border-[#13448a]"
                 >
                   {requests.map(req => (
-                    <option key={req.id} value={req.id}>{req.id} - {req.citizenName} ({req.serviceType})</option>
+                    <option key={req._id} value={req._id}>{req.requestNumber} - {req.citizen?.firstName} ({req.serviceSnapshot?.serviceName || req.service?.name})</option>
                   ))}
                 </select>
               </div>
@@ -360,11 +405,11 @@ export default function AgentDashboard() {
                   onChange={(e) => setSelectedStatus(e.target.value)}
                   className="w-full h-11 px-3.5 rounded-lg border border-gray-200 text-gray-700 focus:ring-2 focus:ring-[#13448a] focus:border-[#13448a]"
                 >
-                  <option value="Assigned">Assigned</option>
-                  <option value="In Progress">In Progress</option>
-                  <option value="Documents Required">Documents Required</option>
-                  <option value="Submitted">Submitted</option>
-                  <option value="Completed">Completed</option>
+                  <option value="assigned">Assigned</option>
+                  <option value="in_progress">In Progress</option>
+                  <option value="documents_required">Documents Required</option>
+                  <option value="completed">Completed</option>
+                  <option value="rejected">Rejected</option>
                 </select>
               </div>
 
@@ -419,7 +464,7 @@ export default function AgentDashboard() {
                   className="w-full h-11 px-3.5 rounded-lg border border-gray-200 text-gray-700 focus:ring-2 focus:ring-[#13448a] focus:border-[#13448a]"
                 >
                   {requests.map(req => (
-                    <option key={req.id} value={req.id}>{req.id} - {req.citizenName}</option>
+                    <option key={req._id} value={req._id}>{req.requestNumber} - {req.citizen?.firstName}</option>
                   ))}
                 </select>
               </div>
