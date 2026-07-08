@@ -59,18 +59,4 @@ router.get(
   adminController.getRequestDetails,
 );
 
-router.patch(
-  '/requests/:id/assign-agent',
-  authorizePermission(Permissions.REQUEST_UPDATE_STATUS),
-  validateRequest(adminValidation.assignAgent),
-  adminController.assignAgent,
-);
-
-router.patch(
-  '/requests/:id/status',
-  authorizePermission(Permissions.REQUEST_UPDATE_STATUS),
-  validateRequest(adminValidation.updateRequestStatus),
-  adminController.updateRequestStatus,
-);
-
 module.exports = router;

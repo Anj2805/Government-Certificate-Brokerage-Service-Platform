@@ -143,7 +143,7 @@ test('Phase 4 - Email Verification Flow', async (t) => {
   await t.test('Unverified Citizen can access draft endpoints but cannot submit', async () => {
     // Fake submit since we don't have a full service seeded in this basic test setup
     const res = await fetch(`${API}/requests/fake_id/submit`, {
-      method: 'PATCH',
+      method: 'POST',
       headers: { 
         'Content-Type': 'application/json',
         Authorization: `Bearer ${citizenAccessToken}`

@@ -67,39 +67,19 @@ const assignAgent = [
     .withMessage('reason must be at most 500 characters'),
 ];
 
-const updateStatus = [
+const updateDraft = [
   ...mongoIdParam,
-  body('status')
-    .isIn([
-      RequestStatus.IN_PROGRESS,
-      RequestStatus.DOCUMENTS_REQUIRED,
-      RequestStatus.COMPLETED,
-    ])
-    .withMessage('status must be in_progress, documents_required, or completed'),
-  body('reason')
+  body('applicationData').optional().isObject().withMessage('applicationData must be an object'),
+  body('notes')
     .optional({ nullable: true, checkFalsy: true })
     .trim()
-    .isLength({ max: 500 })
-    .withMessage('reason must be at most 500 characters'),
+    .isLength({ max: 2000 })
+    .withMessage('notes must be at most 2000 characters'),
+  body('documents').optional().isArray().withMessage('documents must be an array of document IDs'),
+  body('documents.*').optional().isMongoId().withMessage('each document ID must be a valid MongoDB ObjectId'),
 ];
 
-const updateProgress = [
-  ...mongoIdParam,
-  body('status')
-    .isIn([
-      RequestStatus.IN_PROGRESS,
-      RequestStatus.DOCUMENTS_REQUIRED,
-      RequestStatus.COMPLETED,
-    ])
-    .withMessage('status must be in_progress, documents_required, or completed'),
-  body('reason')
-    .optional({ nullable: true, checkFalsy: true })
-    .trim()
-    .isLength({ max: 500 })
-    .withMessage('reason must be at most 500 characters'),
-];
-
-const submitRequest = [
+const withdrawRequest = [
   ...mongoIdParam,
   body('reason')
     .optional({ nullable: true, checkFalsy: true })
@@ -108,11 +88,31 @@ const submitRequest = [
     .withMessage('reason must be at most 500 characters'),
 ];
 
-const cancelRequest = [
+const requestCorrection = [
+  ...mongoIdParam,
+  body('reason')
+    .trim()
+    .notEmpty()
+    .withMessage('reason is required for correction')
+    .isLength({ max: 500 })
+    .withMessage('reason must be at most 500 characters'),
+];
+
+const approveRequest = [
   ...mongoIdParam,
   body('reason')
     .optional({ nullable: true, checkFalsy: true })
     .trim()
+    .isLength({ max: 500 })
+    .withMessage('reason must be at most 500 characters'),
+];
+
+const rejectRequest = [
+  ...mongoIdParam,
+  body('reason')
+    .trim()
+    .notEmpty()
+    .withMessage('reason is required for rejection')
     .isLength({ max: 500 })
     .withMessage('reason must be at most 500 characters'),
 ];
@@ -124,12 +124,14 @@ const attachDocument = [
 
 module.exports = {
   assignAgent,
-  cancelRequest,
+  withdrawRequest,
   createRequest,
+  updateDraft,
+  requestCorrection,
+  approveRequest,
+  rejectRequest,
   getRequest: mongoIdParam,
   listRequests: paginationQuery,
-  submitRequest,
-  updateProgress,
-  updateStatus,
+  submitRequest: mongoIdParam,
   attachDocument,
 };

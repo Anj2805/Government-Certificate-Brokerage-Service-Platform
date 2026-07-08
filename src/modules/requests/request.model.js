@@ -122,12 +122,20 @@ const requestSchema = new mongoose.Schema(
   },
   {
     timestamps: true,
-    versionKey: false,
+    versionKey: '__v',
+    optimisticConcurrency: true,
   },
 );
 
 requestSchema.index({ citizen: 1, status: 1, createdAt: -1 });
 requestSchema.index({ assignedAgent: 1, status: 1, createdAt: -1 });
 requestSchema.index({ service: 1, status: 1 });
+
+requestSchema.pre('save', function (next) {
+  if (!this.isNew && this.isModified()) {
+    this.increment();
+  }
+  next();
+});
 
 module.exports = mongoose.model('Request', requestSchema);

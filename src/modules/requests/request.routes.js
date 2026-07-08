@@ -64,6 +64,14 @@ router.get(
 );
 
 router.patch(
+  '/:id',
+  authenticate,
+  authorizePermission(Permissions.REQUEST_VIEW_OWN),
+  validateRequest(requestValidation.updateDraft),
+  requestController.updateDraft,
+);
+
+router.post(
   '/:id/submit',
   authenticate,
   requireVerifiedEmail,
@@ -72,12 +80,20 @@ router.patch(
   requestController.submitRequest,
 );
 
-router.patch(
-  '/:id/cancel',
+router.post(
+  '/:id/withdraw',
   authenticate,
   authorizePermission(Permissions.REQUEST_VIEW_OWN),
-  validateRequest(requestValidation.cancelRequest),
-  requestController.cancelRequest,
+  validateRequest(requestValidation.withdrawRequest),
+  requestController.withdrawRequest,
+);
+
+router.post(
+  '/:id/resubmit',
+  authenticate,
+  authorizePermission(Permissions.REQUEST_VIEW_OWN),
+  validateRequest(requestValidation.submitRequest),
+  requestController.resubmitRequest,
 );
 
 router.post(
@@ -88,8 +104,8 @@ router.post(
   requestController.attachDocument,
 );
 
-router.patch(
-  '/:id/assign-agent',
+router.post(
+  '/admin/:id/assign',
   authenticate,
   authorizePermission(Permissions.REQUEST_UPDATE_STATUS),
   authorizeRoles(UserRoles.ADMIN),
@@ -97,22 +113,49 @@ router.patch(
   requestController.assignAgent,
 );
 
-router.patch(
-  '/:id/progress',
-  authenticate,
-  authorizePermission(Permissions.REQUEST_UPDATE_STATUS),
-  authorizeRoles(UserRoles.AGENT),
-  validateRequest(requestValidation.updateProgress),
-  requestController.updateStatus,
-);
-
-router.patch(
-  '/:id/status',
+router.post(
+  '/admin/:id/reassign',
   authenticate,
   authorizePermission(Permissions.REQUEST_UPDATE_STATUS),
   authorizeRoles(UserRoles.ADMIN),
-  validateRequest(requestValidation.updateStatus),
-  requestController.updateStatus,
+  validateRequest(requestValidation.assignAgent),
+  requestController.reassignAgent,
+);
+
+router.post(
+  '/agent/:id/start-processing',
+  authenticate,
+  authorizePermission(Permissions.REQUEST_UPDATE_STATUS),
+  authorizeRoles(UserRoles.AGENT),
+  validateRequest(requestValidation.getRequest),
+  requestController.startProcessing,
+);
+
+router.post(
+  '/agent/:id/request-correction',
+  authenticate,
+  authorizePermission(Permissions.REQUEST_UPDATE_STATUS),
+  authorizeRoles(UserRoles.AGENT),
+  validateRequest(requestValidation.requestCorrection),
+  requestController.requestCorrection,
+);
+
+router.post(
+  '/agent/:id/approve',
+  authenticate,
+  authorizePermission(Permissions.REQUEST_UPDATE_STATUS),
+  authorizeRoles(UserRoles.AGENT),
+  validateRequest(requestValidation.approveRequest),
+  requestController.approveRequest,
+);
+
+router.post(
+  '/agent/:id/reject',
+  authenticate,
+  authorizePermission(Permissions.REQUEST_UPDATE_STATUS),
+  authorizeRoles(UserRoles.AGENT),
+  validateRequest(requestValidation.rejectRequest),
+  requestController.rejectRequest,
 );
 
 module.exports = router;

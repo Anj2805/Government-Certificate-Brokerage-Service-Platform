@@ -4,7 +4,7 @@ const asyncHandler = require('../../utils/async-handler');
 const requestService = require('./request.service');
 
 const createRequest = asyncHandler(async (req, res) => {
-  const request = await requestService.createRequest(req.body, req.user);
+  const request = await requestService.createRequest(req.body, req.user, req.id);
 
   return ApiResponse.success(res, {
     statusCode: httpStatus.CREATED,
@@ -68,19 +68,10 @@ const getRequestDetails = asyncHandler(async (req, res) => {
 });
 
 const submitRequest = asyncHandler(async (req, res) => {
-  const request = await requestService.submitRequest(req.params.id, req.user, req.body.reason);
+  const request = await requestService.submitRequest(req.params.id, req.user, req.body.reason, req.id);
 
   return ApiResponse.success(res, {
     message: 'Request submitted successfully',
-    data: { request },
-  });
-});
-
-const cancelRequest = asyncHandler(async (req, res) => {
-  const request = await requestService.cancelRequest(req.params.id, req.user, req.body.reason);
-
-  return ApiResponse.success(res, {
-    message: 'Request cancelled successfully',
     data: { request },
   });
 });
@@ -91,6 +82,7 @@ const assignAgent = asyncHandler(async (req, res) => {
     req.body.agentId,
     req.user,
     req.body.reason,
+    req.id
   );
 
   return ApiResponse.success(res, {
@@ -99,16 +91,80 @@ const assignAgent = asyncHandler(async (req, res) => {
   });
 });
 
-const updateStatus = asyncHandler(async (req, res) => {
-  const request = await requestService.updateStatus(
+const withdrawRequest = asyncHandler(async (req, res) => {
+  const request = await requestService.withdrawRequest(req.params.id, req.user, req.body.reason, req.id);
+
+  return ApiResponse.success(res, {
+    message: 'Request withdrawn successfully',
+    data: { request },
+  });
+});
+
+const reassignAgent = asyncHandler(async (req, res) => {
+  const request = await requestService.reassignAgent(
     req.params.id,
-    req.body.status,
+    req.body.agentId,
     req.user,
     req.body.reason,
+    req.id
   );
 
   return ApiResponse.success(res, {
-    message: 'Request status updated successfully',
+    message: 'Agent reassigned successfully',
+    data: { request },
+  });
+});
+
+const startProcessing = asyncHandler(async (req, res) => {
+  const request = await requestService.startProcessing(req.params.id, req.user, req.id);
+
+  return ApiResponse.success(res, {
+    message: 'Started processing request',
+    data: { request },
+  });
+});
+
+const requestCorrection = asyncHandler(async (req, res) => {
+  const request = await requestService.requestCorrection(req.params.id, req.user, req.body.reason, req.id);
+
+  return ApiResponse.success(res, {
+    message: 'Correction requested successfully',
+    data: { request },
+  });
+});
+
+const approveRequest = asyncHandler(async (req, res) => {
+  const request = await requestService.approveRequest(req.params.id, req.user, req.body.reason, req.id);
+
+  return ApiResponse.success(res, {
+    message: 'Request approved successfully',
+    data: { request },
+  });
+});
+
+const rejectRequest = asyncHandler(async (req, res) => {
+  const request = await requestService.rejectRequest(req.params.id, req.user, req.body.reason, req.id);
+
+  return ApiResponse.success(res, {
+    message: 'Request rejected successfully',
+    data: { request },
+  });
+});
+
+const resubmitRequest = asyncHandler(async (req, res) => {
+  const request = await requestService.resubmitRequest(req.params.id, req.user, req.body.reason, req.id);
+
+  return ApiResponse.success(res, {
+    message: 'Request resubmitted successfully',
+    data: { request },
+  });
+});
+
+const updateDraft = asyncHandler(async (req, res) => {
+  const request = await requestService.updateDraft(req.params.id, req.body, req.user, req.id);
+
+  return ApiResponse.success(res, {
+    message: 'Draft updated successfully',
     data: { request },
   });
 });
@@ -137,14 +193,20 @@ const attachDocument = asyncHandler(async (req, res) => {
 
 module.exports = {
   assignAgent,
-  cancelRequest,
+  reassignAgent,
+  withdrawRequest,
   createRequest,
+  updateDraft,
   getRequestDetails,
   listAllRequests,
   listAssignedRequests,
   listOwnRequests,
   submitRequest,
-  updateStatus,
+  resubmitRequest,
+  startProcessing,
+  requestCorrection,
+  approveRequest,
+  rejectRequest,
   getRequestsSummary,
   attachDocument,
 };

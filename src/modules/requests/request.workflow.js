@@ -47,18 +47,24 @@ const roleTransitions = Object.freeze({
     [RequestStatus.SUBMITTED]: Object.freeze([
       RequestStatus.CANCELLED,
     ]),
+    [RequestStatus.DOCUMENTS_REQUIRED]: Object.freeze([
+      RequestStatus.IN_PROGRESS,
+    ]),
   }),
   [UserRoles.AGENT]: Object.freeze({
     [RequestStatus.ASSIGNED]: Object.freeze([
       RequestStatus.IN_PROGRESS,
       RequestStatus.DOCUMENTS_REQUIRED,
+      RequestStatus.REJECTED,
     ]),
     [RequestStatus.IN_PROGRESS]: Object.freeze([
       RequestStatus.DOCUMENTS_REQUIRED,
       RequestStatus.COMPLETED,
+      RequestStatus.REJECTED,
     ]),
     [RequestStatus.DOCUMENTS_REQUIRED]: Object.freeze([
       RequestStatus.IN_PROGRESS,
+      RequestStatus.REJECTED,
     ]),
   }),
   [UserRoles.ADMIN]: allowedTransitions,

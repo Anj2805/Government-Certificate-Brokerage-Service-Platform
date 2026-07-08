@@ -84,32 +84,12 @@ const getRequestDetails = asyncHandler(async (req, res) => {
   });
 });
 
-const assignAgent = asyncHandler(async (req, res) => {
-  const request = await adminService.assignAgent(req.params.id, req.body, req.user);
-
-  return ApiResponse.success(res, {
-    message: 'Agent assigned successfully',
-    data: { request },
-  });
-});
-
-const updateRequestStatus = asyncHandler(async (req, res) => {
-  const request = await adminService.updateRequestStatus(req.params.id, req.body, req.user);
-
-  return ApiResponse.success(res, {
-    message: 'Request status updated successfully',
-    data: { request },
-  });
-});
-
 module.exports = {
   approveAgent,
-  assignAgent,
   getDashboardMetrics,
   getRequestDetails,
   listAgents,
   listRequests,
   rejectAgent,
   suspendAgent,
-  updateRequestStatus,
 };

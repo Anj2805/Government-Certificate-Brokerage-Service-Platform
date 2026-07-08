@@ -158,7 +158,7 @@ test('Phase 5 - Notification System Verification', async (t) => {
     requestId = data.data.request._id;
     
     const subRes = await fetch(`${API}/requests/${requestId}/submit`, {
-      method: 'PATCH',
+      method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${citizenAccessToken}` }
     });
     assert.strictEqual(subRes.status, 200);
@@ -178,8 +178,8 @@ test('Phase 5 - Notification System Verification', async (t) => {
   });
 
   await t.test('Admin assigning agent creates AGENT_ASSIGNED notification', async () => {
-    const res = await fetch(`${API}/admin/requests/${requestId}/assign-agent`, {
-      method: 'PATCH',
+    const res = await fetch(`${API}/requests/admin/${requestId}/assign`, {
+      method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminAccessToken}` },
       body: JSON.stringify({ agentId })
     });
@@ -190,10 +190,9 @@ test('Phase 5 - Notification System Verification', async (t) => {
   });
 
   await t.test('Agent updating progress creates REQUEST_IN_PROGRESS notification', async () => {
-    const res = await fetch(`${API}/agents/requests/${requestId}/progress`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${agentAccessToken}` },
-      body: JSON.stringify({ status: 'in_progress', reason: 'starting work' })
+    const res = await fetch(`${API}/requests/agent/${requestId}/start-processing`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${agentAccessToken}` }
     });
     
     assert.strictEqual(res.status, 200);
@@ -309,27 +308,26 @@ test('Phase 5 - Notification System Verification', async (t) => {
 
   await t.test('Remaining Transitions: documents_required, rejected', async () => {
     // Transition to documents_required
-    let res = await fetch(`${API}/agents/requests/${requestId}/progress`, {
-      method: 'PATCH',
+    let res = await fetch(`${API}/requests/agent/${requestId}/request-correction`, {
+      method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${agentAccessToken}` },
-      body: JSON.stringify({ status: 'documents_required', reason: 'need ID' })
+      body: JSON.stringify({ reason: 'need ID' })
     });
     assert.strictEqual(res.status, 200);
     let count = await Notification.countDocuments({ request: requestId, type: NotificationType.DOCUMENTS_REQUIRED });
     assert.strictEqual(count, 1);
 
     // Transition back to in_progress (simulate upload)
-    await fetch(`${API}/agents/requests/${requestId}/progress`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${agentAccessToken}` },
-      body: JSON.stringify({ status: 'in_progress', reason: 'got ID' })
+    await fetch(`${API}/requests/${requestId}/resubmit`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${citizenAccessToken}` }
     });
 
-    // Transition to rejected via Admin
-    res = await fetch(`${API}/admin/requests/${requestId}/status`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminAccessToken}` },
-      body: JSON.stringify({ status: 'rejected', reason: 'invalid' })
+    // Transition to rejected via Agent (Admin doesn't reject directly anymore)
+    res = await fetch(`${API}/requests/agent/${requestId}/reject`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${agentAccessToken}` },
+      body: JSON.stringify({ reason: 'invalid' })
     });
     assert.strictEqual(res.status, 200);
     count = await Notification.countDocuments({ request: requestId, type: NotificationType.REQUEST_REJECTED });
@@ -354,14 +352,14 @@ test('Phase 5 - Notification System Verification', async (t) => {
 
     // 1. Submit
     res = await fetch(`${API}/requests/${newReqId}/submit`, {
-      method: 'PATCH',
+      method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${citizenAccessToken}` }
     });
     assert.strictEqual(res.status, 200);
 
     // 2. Cancellation
-    res = await fetch(`${API}/requests/${newReqId}/cancel`, {
-      method: 'PATCH',
+    res = await fetch(`${API}/requests/${newReqId}/withdraw`, {
+      method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${citizenAccessToken}` }
     });
     assert.strictEqual(res.status, 200);
@@ -377,20 +375,19 @@ test('Phase 5 - Notification System Verification', async (t) => {
       body: JSON.stringify({ serviceId, status: 'draft' })
     });
     newReqId = (await res.json()).data.request._id;
-    await fetch(`${API}/requests/${newReqId}/submit`, { method: 'PATCH', headers: { Authorization: `Bearer ${citizenAccessToken}` } });
+    await fetch(`${API}/requests/${newReqId}/submit`, { method: 'POST', headers: { Authorization: `Bearer ${citizenAccessToken}` } });
     
-    res = await fetch(`${API}/admin/requests/${newReqId}/assign-agent`, {
-      method: 'PATCH',
+    res = await fetch(`${API}/requests/admin/${newReqId}/assign`, {
+      method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminAccessToken}` },
       body: JSON.stringify({ agentId })
     });
     assert.strictEqual(res.status, 200);
 
     // 4. Status Transition
-    res = await fetch(`${API}/agents/requests/${newReqId}/progress`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${agentAccessToken}` },
-      body: JSON.stringify({ status: 'in_progress', reason: 'starting' })
+    res = await fetch(`${API}/requests/agent/${newReqId}/start-processing`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${agentAccessToken}` }
     });
     assert.strictEqual(res.status, 200);
 

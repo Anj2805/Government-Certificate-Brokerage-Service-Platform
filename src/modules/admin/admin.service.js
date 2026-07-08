@@ -186,20 +186,12 @@ const listRequests = async (query, adminUser) =>
 const getRequestDetails = async (requestId, adminUser) =>
   requestService.getRequestDetails(requestId, adminUser);
 
-const assignAgent = async (requestId, payload, adminUser) =>
-  requestService.assignAgent(requestId, payload.agentId, adminUser, payload.reason);
-
-const updateRequestStatus = async (requestId, payload, adminUser) =>
-  requestService.updateStatus(requestId, payload.status, adminUser, payload.reason);
-
 module.exports = {
   approveAgent,
-  assignAgent,
   getDashboardMetrics,
   getRequestDetails,
   listAgents,
   listRequests,
   rejectAgent,
   suspendAgent,
-  updateRequestStatus,
 };

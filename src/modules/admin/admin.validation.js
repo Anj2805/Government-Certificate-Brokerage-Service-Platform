@@ -58,40 +58,11 @@ const suspendAgent = [
     .withMessage('reason must be at most 500 characters'),
 ];
 
-const assignAgent = [
-  ...mongoIdParam,
-  body('agentId').isMongoId().withMessage('agentId must be a valid MongoDB ObjectId'),
-  body('reason')
-    .optional({ nullable: true, checkFalsy: true })
-    .trim()
-    .isLength({ max: 500 })
-    .withMessage('reason must be at most 500 characters'),
-];
-
-const updateRequestStatus = [
-  ...mongoIdParam,
-  body('status')
-    .isIn([
-      RequestStatus.IN_PROGRESS,
-      RequestStatus.DOCUMENTS_REQUIRED,
-      RequestStatus.COMPLETED,
-      RequestStatus.REJECTED,
-    ])
-    .withMessage('status must be in_progress, documents_required, completed, or rejected'),
-  body('reason')
-    .optional({ nullable: true, checkFalsy: true })
-    .trim()
-    .isLength({ max: 500 })
-    .withMessage('reason must be at most 500 characters'),
-];
-
 module.exports = {
   approveAgent: mongoIdParam,
-  assignAgent,
   getRequestDetails: mongoIdParam,
   listAgents,
   listRequests,
   rejectAgent,
   suspendAgent,
-  updateRequestStatus,
 };

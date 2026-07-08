@@ -8,9 +8,13 @@ const Document = require('../documents/document.model');
 const Service = require('../services/service.model');
 const User = require('../users/user.model');
 const requestRepository = require('./request.repository');
-const { assertTransitionAllowed } = require('./request.workflow');
+const {
+  assertTransitionAllowed,
+  terminalStatuses,
+} = require('./request.workflow');
 const notificationService = require('../notifications/notification.service');
 const NotificationType = require('../../common/enums/notification-type.enum');
+const logger = require('../../config/logger');
 
 const DEFAULT_PAGE = 1;
 const DEFAULT_LIMIT = 10;
@@ -68,11 +72,13 @@ const ensureRequestAccess = (request, user) => {
     return;
   }
 
-  if (user.role === UserRoles.AGENT && request.assignedAgent?.toString() === user.id) {
+  const agentId = request.assignedAgent?._id ? request.assignedAgent._id.toString() : request.assignedAgent?.toString();
+  if (user.role === UserRoles.AGENT && agentId === user.id) {
     return;
   }
 
-  if (user.role === UserRoles.CITIZEN && request.citizen.toString() === user.id) {
+  const citizenId = request.citizen?._id ? request.citizen._id.toString() : request.citizen?.toString();
+  if (user.role === UserRoles.CITIZEN && citizenId === user.id) {
     return;
   }
 
@@ -161,7 +167,7 @@ const buildListQuery = (query, user, scope) => {
   return dbQuery;
 };
 
-const createRequest = async (payload, user) => {
+const createRequest = async (payload, user, reqId) => {
   const service = await ensureActiveService(payload.serviceId);
   await ensureDocumentsAccessible({ documentIds: payload.documents, userId: user.id });
 
@@ -185,6 +191,7 @@ const createRequest = async (payload, user) => {
     submittedAt: initialStatus === RequestStatus.SUBMITTED ? now : undefined,
     statusHistory: [
       {
+        fromStatus: undefined,
         toStatus: initialStatus,
         changedBy: user.id,
         changedByRole: user.role,
@@ -194,7 +201,33 @@ const createRequest = async (payload, user) => {
     ],
   });
 
+  logger.info({ audit: true, eventType: 'APPLICATION_DRAFT_CREATED', requestId: reqId, actorId: user.id, role: user.role, applicationNumber: request.requestNumber }, 'Draft application created');
+
   return request;
+};
+
+const updateDraft = async (requestId, payload, user, reqId) => {
+  const request = await requestRepository.findById(requestId);
+  if (!request) throw new ApiError(httpStatus.NOT_FOUND, 'Request not found');
+  ensureRequestAccess(request, user);
+
+  if (request.status !== RequestStatus.DRAFT && request.status !== RequestStatus.DOCUMENTS_REQUIRED) {
+    throw new ApiError(httpStatus.BAD_REQUEST, 'Cannot update application in current status');
+  }
+
+  // Explicit allowlisting
+  if (payload.applicationData) request.applicationData = payload.applicationData;
+  if (payload.notes !== undefined) request.notes = payload.notes;
+
+  if (payload.documents) {
+    await ensureDocumentsAccessible({ documentIds: payload.documents, userId: user.id });
+    request.documents = payload.documents;
+  }
+
+  const savedRequest = await requestRepository.save(request);
+  logger.info({ audit: true, eventType: 'APPLICATION_UPDATED', requestId: reqId, actorId: user.id, role: user.role, applicationNumber: request.requestNumber }, 'Application draft updated');
+
+  return savedRequest;
 };
 
 const listRequests = async ({ query, user, scope }) => {
@@ -224,7 +257,7 @@ const getRequestDetails = async (requestId, user) => {
   return request;
 };
 
-const submitRequest = async (requestId, user, reason) => {
+const submitRequest = async (requestId, user, reason, reqId) => {
   const request = await requestRepository.findById(requestId);
 
   if (!request) {
@@ -232,11 +265,18 @@ const submitRequest = async (requestId, user, reason) => {
   }
 
   ensureRequestAccess(request, user);
-  transitionRequest(request, RequestStatus.SUBMITTED, user, reason);
+
+  // Need to ensure application data is valid if required, but currently no specific service requirements in payload.
+  // Generate application number if not present
+  if (!request.requestNumber) {
+    request.requestNumber = await generateRequestNumber(new Date());
+  }
+
+  transitionRequest(request, RequestStatus.SUBMITTED, user, reason || 'Application submitted');
 
   const savedRequest = await requestRepository.save(request);
   const eventId = savedRequest.statusHistory.length - 1;
-  
+
   await notificationService.createRequestNotification({
     recipientId: savedRequest.citizen,
     requestId: savedRequest._id,
@@ -244,10 +284,12 @@ const submitRequest = async (requestId, user, reason) => {
     eventId
   });
 
+  logger.info({ audit: true, eventType: 'APPLICATION_SUBMITTED', requestId: reqId, actorId: user.id, role: user.role, applicationNumber: savedRequest.requestNumber }, 'Application submitted');
+
   return savedRequest;
 };
 
-const cancelRequest = async (requestId, user, reason) => {
+const withdrawRequest = async (requestId, user, reason, reqId) => {
   const request = await requestRepository.findById(requestId);
 
   if (!request) {
@@ -255,7 +297,7 @@ const cancelRequest = async (requestId, user, reason) => {
   }
 
   ensureRequestAccess(request, user);
-  transitionRequest(request, RequestStatus.CANCELLED, user, reason);
+  transitionRequest(request, RequestStatus.CANCELLED, user, reason || 'Application withdrawn');
 
   const savedRequest = await requestRepository.save(request);
   const eventId = savedRequest.statusHistory.length - 1;
@@ -267,10 +309,12 @@ const cancelRequest = async (requestId, user, reason) => {
     eventId
   });
 
+  logger.info({ audit: true, eventType: 'APPLICATION_WITHDRAWN', requestId: reqId, actorId: user.id, role: user.role, applicationNumber: savedRequest.requestNumber }, 'Application withdrawn');
+
   return savedRequest;
 };
 
-const assignAgent = async (requestId, agentId, adminUser, reason) => {
+const assignAgent = async (requestId, agentId, adminUser, reason, reqId) => {
   const request = await requestRepository.findById(requestId);
 
   if (!request) {
@@ -292,52 +336,132 @@ const assignAgent = async (requestId, agentId, adminUser, reason) => {
     eventId
   });
 
+  logger.info({ audit: true, eventType: 'APPLICATION_ASSIGNED', requestId: reqId, actorId: adminUser.id, targetAgentId: agentId, applicationNumber: savedRequest.requestNumber }, 'Application assigned to agent');
+
   return savedRequest;
 };
 
-const updateStatus = async (requestId, status, user, reason) => {
+const reassignAgent = async (requestId, agentId, adminUser, reason, reqId) => {
   const request = await requestRepository.findById(requestId);
 
   if (!request) {
     throw new ApiError(httpStatus.NOT_FOUND, 'Request not found');
   }
 
-  ensureRequestAccess(request, user);
-
-  if (user.role === UserRoles.AGENT && request.assignedAgent?.toString() !== user.id) {
-    throw new ApiError(httpStatus.FORBIDDEN, 'Only the assigned agent can update this request');
+  if (terminalStatuses?.includes(request.status)) {
+     throw new ApiError(httpStatus.BAD_REQUEST, 'Cannot reassign a terminal application');
   }
 
-  transitionRequest(request, status, user, reason);
+  await ensureAgentUser(agentId);
+
+  const oldAgentId = request.assignedAgent;
+  request.assignedAgent = agentId;
+  request.assignedAt = new Date();
+
+  appendStatusHistory(request, {
+    fromStatus: request.status,
+    toStatus: request.status,
+    user: adminUser,
+    reason: reason || 'Agent reassigned',
+  });
 
   const savedRequest = await requestRepository.save(request);
-  const eventId = savedRequest.statusHistory.length - 1;
 
-  let type;
-  switch (status) {
-    case RequestStatus.IN_PROGRESS:
-      type = NotificationType.REQUEST_IN_PROGRESS;
-      break;
-    case RequestStatus.DOCUMENTS_REQUIRED:
-      type = NotificationType.DOCUMENTS_REQUIRED;
-      break;
-    case RequestStatus.COMPLETED:
-      type = NotificationType.REQUEST_COMPLETED;
-      break;
-    case RequestStatus.REJECTED:
-      type = NotificationType.REQUEST_REJECTED;
-      break;
-  }
+  logger.info({ audit: true, eventType: 'APPLICATION_REASSIGNED', requestId: reqId, actorId: adminUser.id, targetAgentId: agentId, oldAgentId, applicationNumber: savedRequest.requestNumber }, 'Application reassigned to agent');
 
-  if (type) {
-    await notificationService.createRequestNotification({
-      recipientId: savedRequest.citizen,
-      requestId: savedRequest._id,
-      type,
-      eventId
-    });
-  }
+  return savedRequest;
+};
 
+const startProcessing = async (requestId, user, reqId) => {
+  const request = await requestRepository.findById(requestId);
+  if (!request) throw new ApiError(httpStatus.NOT_FOUND, 'Request not found');
+  ensureRequestAccess(request, user);
+
+  transitionRequest(request, RequestStatus.IN_PROGRESS, user, 'Agent started processing');
+
+  const savedRequest = await requestRepository.save(request);
+
+  await notificationService.createRequestNotification({
+    recipientId: savedRequest.citizen,
+    requestId: savedRequest._id,
+    type: NotificationType.REQUEST_IN_PROGRESS,
+    eventId: savedRequest.statusHistory.length - 1
+  });
+
+  logger.info({ audit: true, eventType: 'APPLICATION_PROCESSING_STARTED', requestId: reqId, actorId: user.id, applicationNumber: savedRequest.requestNumber }, 'Application processing started');
+  return savedRequest;
+};
+
+const requestCorrection = async (requestId, user, reason, reqId) => {
+  const request = await requestRepository.findById(requestId);
+  if (!request) throw new ApiError(httpStatus.NOT_FOUND, 'Request not found');
+  ensureRequestAccess(request, user);
+
+  transitionRequest(request, RequestStatus.DOCUMENTS_REQUIRED, user, reason);
+
+  const savedRequest = await requestRepository.save(request);
+
+  await notificationService.createRequestNotification({
+    recipientId: savedRequest.citizen,
+    requestId: savedRequest._id,
+    type: NotificationType.DOCUMENTS_REQUIRED,
+    eventId: savedRequest.statusHistory.length - 1
+  });
+
+  logger.info({ audit: true, eventType: 'APPLICATION_CORRECTION_REQUESTED', requestId: reqId, actorId: user.id, applicationNumber: savedRequest.requestNumber }, 'Application correction requested');
+  return savedRequest;
+};
+
+const approveRequest = async (requestId, user, reason, reqId) => {
+  const request = await requestRepository.findById(requestId);
+  if (!request) throw new ApiError(httpStatus.NOT_FOUND, 'Request not found');
+  ensureRequestAccess(request, user);
+
+  transitionRequest(request, RequestStatus.COMPLETED, user, reason || 'Application approved');
+
+  const savedRequest = await requestRepository.save(request);
+
+  await notificationService.createRequestNotification({
+    recipientId: savedRequest.citizen,
+    requestId: savedRequest._id,
+    type: NotificationType.REQUEST_COMPLETED,
+    eventId: savedRequest.statusHistory.length - 1
+  });
+
+  logger.info({ audit: true, eventType: 'APPLICATION_APPROVED', requestId: reqId, actorId: user.id, applicationNumber: savedRequest.requestNumber }, 'Application approved');
+  return savedRequest;
+};
+
+const rejectRequest = async (requestId, user, reason, reqId) => {
+  const request = await requestRepository.findById(requestId);
+  if (!request) throw new ApiError(httpStatus.NOT_FOUND, 'Request not found');
+  ensureRequestAccess(request, user);
+
+  transitionRequest(request, RequestStatus.REJECTED, user, reason);
+
+  const savedRequest = await requestRepository.save(request);
+
+  await notificationService.createRequestNotification({
+    recipientId: savedRequest.citizen,
+    requestId: savedRequest._id,
+    type: NotificationType.REQUEST_REJECTED,
+    eventId: savedRequest.statusHistory.length - 1
+  });
+
+  logger.info({ audit: true, eventType: 'APPLICATION_REJECTED', requestId: reqId, actorId: user.id, applicationNumber: savedRequest.requestNumber }, 'Application rejected');
+  return savedRequest;
+};
+
+const resubmitRequest = async (requestId, user, reason, reqId) => {
+  const request = await requestRepository.findById(requestId);
+  if (!request) throw new ApiError(httpStatus.NOT_FOUND, 'Request not found');
+  ensureRequestAccess(request, user);
+
+  transitionRequest(request, RequestStatus.IN_PROGRESS, user, reason || 'Application resubmitted by citizen');
+
+  const savedRequest = await requestRepository.save(request);
+
+  logger.info({ audit: true, eventType: 'APPLICATION_RESUBMITTED', requestId: reqId, actorId: user.id, applicationNumber: savedRequest.requestNumber }, 'Application resubmitted');
   return savedRequest;
 };
 
@@ -396,12 +520,18 @@ const attachDocument = async (requestId, documentId, user) => {
 
 module.exports = {
   assignAgent,
-  cancelRequest,
+  reassignAgent,
+  withdrawRequest,
   createRequest,
+  updateDraft,
   getRequestDetails,
   listRequests,
   submitRequest,
-  updateStatus,
+  resubmitRequest,
+  startProcessing,
+  requestCorrection,
+  approveRequest,
+  rejectRequest,
   getRequestsSummary,
   attachDocument,
 };

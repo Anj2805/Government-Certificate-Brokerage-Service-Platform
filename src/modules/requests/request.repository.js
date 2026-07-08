@@ -28,7 +28,19 @@ const findPaginated = async ({ query, page, limit }) => {
   };
 };
 
-const save = (request) => request.save();
+const httpStatus = require('http-status');
+const ApiError = require('../../common/errors/api-error');
+
+const save = async (request) => {
+  try {
+    return await request.save();
+  } catch (error) {
+    if (error instanceof mongoose.Error.VersionError) {
+      throw new ApiError(httpStatus.CONFLICT, 'Concurrent update detected. Please try again.');
+    }
+    throw error;
+  }
+};
 
 const getSummary = async (citizenId) => {
   const result = await Request.aggregate([
