@@ -8,8 +8,10 @@
     "dev": "nodemon server.js",
     "lint": "eslint .",
     "test": "node --test",
+    "test:all": "for file in test_phase*.js; do node --test \"$file\" || exit 1; done",
     "seed:admin": "node scripts/seedAdmin.js",
-    "seed:services": "node scripts/seedServices.js"
+    "seed:services": "node scripts/seedServices.js",
+    "worker": "node worker.js"
   },
   "keywords": [
     "nodejs",

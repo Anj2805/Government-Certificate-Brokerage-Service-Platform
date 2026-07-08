@@ -87,4 +87,23 @@ module.exports = {
   logging: {
     level: process.env.LOG_LEVEL || 'info',
   },
+  worker: {
+    pollIntervalMs: parseNumber(process.env.WORKER_POLL_INTERVAL_MS, 5000),
+    concurrency: parseNumber(process.env.WORKER_CONCURRENCY, 10),
+    leaseMs: parseNumber(process.env.WORKER_LEASE_MS, 60000),
+    shutdownTimeoutMs: parseNumber(process.env.WORKER_SHUTDOWN_TIMEOUT_MS, 15000),
+  },
+  jobs: {
+    maxAttempts: parseNumber(process.env.JOB_MAX_ATTEMPTS, 5),
+    retryBaseDelayMs: parseNumber(process.env.JOB_RETRY_BASE_DELAY_MS, 5000),
+    retryMaxDelayMs: parseNumber(process.env.JOB_RETRY_MAX_DELAY_MS, 86400000), // 24 hours
+  },
+  scheduler: {
+    scanIntervalMs: parseNumber(process.env.REMINDER_SCAN_INTERVAL_MS, 60000),
+    batchSize: parseNumber(process.env.REMINDER_BATCH_SIZE, 50),
+    correctionReminderAfterDays: parseNumber(process.env.CORRECTION_REMINDER_AFTER_DAYS, 3),
+  },
+  encryption: {
+    deliverySecretKey: process.env.DELIVERY_SECRET_ENCRYPTION_KEY || '0123456789abcdef0123456789abcdef', // 32 chars for testing
+  },
 };

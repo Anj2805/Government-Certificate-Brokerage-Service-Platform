@@ -5,7 +5,7 @@ const config = require('../../config');
 const logger = require('../../config/logger');
 const UserRoles = require('../../common/enums/user-roles.enum');
 const AgentStatus = require('../../common/enums/agent-status.enum');
-const emailService = require('../../services/email.service');
+const jobService = require('../jobs/job.service');
 const User = require('../users/user.model');
 const { toSafeUser } = require('../users/user.dto');
 const { comparePassword, hashPassword } = require('./password.util');
@@ -30,28 +30,34 @@ const issueVerificationEmail = async (user) => {
   const token = generateSecureToken();
   const tokenHash = hashSecureToken(token);
   const expiresAt = new Date(Date.now() + config.emailVerification.tokenTtlHours * 60 * 60 * 1000);
-  const verificationUrl = `${config.frontend.url.replace(/\/$/, '')}/verify-email/${encodeURIComponent(token)}`;
-
+  
   user.emailVerificationTokenHash = tokenHash;
   user.emailVerificationExpiresAt = expiresAt;
   await user.save();
 
-  try {
-    await emailService.sendEmailVerificationEmail({
-      to: user.email,
-      verificationUrl,
-      expiresInHours: config.emailVerification.tokenTtlHours,
-    });
-  } catch (error) {
-    user.emailVerificationTokenHash = null;
-    user.emailVerificationExpiresAt = null;
-    await user.save();
-
-    logger.error(
-      { err: error, userId: user.id },
-      'Verification email delivery failed',
-    );
-  }
+  // Enqueue Outbox Event
+  await jobService.enqueueOutboxEvent({
+    eventType: 'EMAIL_VERIFICATION_DELIVERY_REQUESTED',
+    aggregateType: 'User',
+    aggregateId: user.id,
+    idempotencyKey: `EMAIL_VERIFICATION:${user.id}:${tokenHash}`, // unique per generated token
+    payload: {
+      userId: user.id,
+      email: user.email,
+    },
+    jobsToCreate: [
+      {
+        channel: 'EMAIL',
+        jobType: 'EMAIL_VERIFICATION',
+        recipientReference: user.email,
+        payload: {
+          expiresInHours: config.emailVerification.tokenTtlHours,
+        },
+        secret: token,
+        secretExpiresAt: expiresAt,
+      }
+    ]
+  });
 };
 
 const buildAuthPayload = async (user) => {
@@ -169,31 +175,33 @@ const requestPasswordReset = async ({ email }) => {
   const token = generatePasswordResetToken();
   const tokenHash = hashPasswordResetToken(token);
   const expiresAt = new Date(Date.now() + config.passwordReset.tokenTtlMinutes * 60 * 1000);
-  const resetUrl = `${config.frontend.url.replace(/\/$/, '')}/reset-password/${encodeURIComponent(token)}`;
 
   user.passwordResetTokenHash = tokenHash;
   user.passwordResetExpiresAt = expiresAt;
   await user.save();
 
-  try {
-    await emailService.sendPasswordResetEmail({
-      to: user.email,
-      resetUrl,
-      expiresInMinutes: config.passwordReset.tokenTtlMinutes,
-    });
-  } catch (error) {
-    user.passwordResetTokenHash = null;
-    user.passwordResetExpiresAt = null;
-    await user.save();
-
-    logger.error(
+  await jobService.enqueueOutboxEvent({
+    eventType: 'PASSWORD_RESET_DELIVERY_REQUESTED',
+    aggregateType: 'User',
+    aggregateId: user.id,
+    idempotencyKey: `PASSWORD_RESET:${user.id}:${tokenHash}`, // unique per reset token
+    payload: {
+      userId: user.id,
+      email: user.email,
+    },
+    jobsToCreate: [
       {
-        err: error,
-        userId: user.id,
-      },
-      'Password reset email delivery failed',
-    );
-  }
+        channel: 'EMAIL',
+        jobType: 'PASSWORD_RESET',
+        recipientReference: user.email,
+        payload: {
+          expiresInMinutes: config.passwordReset.tokenTtlMinutes,
+        },
+        secret: token,
+        secretExpiresAt: expiresAt,
+      }
+    ]
+  });
 
   return { message: FORGOT_PASSWORD_MESSAGE };
 };

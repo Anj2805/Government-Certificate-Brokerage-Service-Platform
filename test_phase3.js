@@ -52,6 +52,10 @@ test('Phase 3 - Forgot Password and Reset Password Flow', async (t) => {
       : config.database.uri + '_test';
     await mongoose.connect(testDbUri);
     
+    // Clear jobs to prevent cross-test leakage
+    await mongoose.connection.collection('deliveryjobs').deleteMany({});
+    await mongoose.connection.collection('outboxevents').deleteMany({});
+    
     // Start server on dynamic port
     await new Promise((resolve) => {
       server = app.listen(0, () => {
@@ -136,6 +140,9 @@ test('Phase 3 - Forgot Password and Reset Password Flow', async (t) => {
     const data = await res.json();
     assert.match(data.message, /If an account exists/);
     
+    // Process the outbox queue
+    while (await require('./src/workers/delivery.worker').runOnce()) {}
+
     const messages = emailService.getCapturedPasswordResetMessages();
     assert.strictEqual(messages.length, 1);
     assert.strictEqual(messages[0].to, userEmail);
@@ -158,16 +165,20 @@ test('Phase 3 - Forgot Password and Reset Password Flow', async (t) => {
     emailService.clearCapturedPasswordResetMessages();
     const userBefore = await User.findById(userId).select('+passwordResetTokenHash');
     const oldHash = userBefore.passwordResetTokenHash;
-    
-    await fetch(`${API}/auth/forgot-password`, {
+    const res = await fetch(`${API}/auth/forgot-password`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email: userEmail })
     });
+    assert.strictEqual(res.status, 200);
     
+    while (await require('./src/workers/delivery.worker').runOnce()) {}
+
     const messages = emailService.getCapturedPasswordResetMessages();
-    const urlParts = messages[0].resetUrl.split('/');
-    resetToken = urlParts[urlParts.length - 1]; // Update resetToken to new one
+    assert.strictEqual(messages.length, 1);
+    
+    const newUrlParts = messages[0].resetUrl.split('/');
+    resetToken = newUrlParts[newUrlParts.length - 1]; // Update resetToken to new one
     
     const userAfter = await User.findById(userId).select('+passwordResetTokenHash');
     assert.notStrictEqual(userAfter.passwordResetTokenHash, oldHash);
@@ -346,7 +357,7 @@ test('Phase 3 - Forgot Password and Reset Password Flow', async (t) => {
     assert.strictEqual(user.passwordResetExpiresAt, null);
   });
 
-  await t.test('Email delivery failure gracefully clears fields and returns 200', async () => {
+  await t.test('Email delivery failure gracefully returns 200 (Outbox handles retries)', async () => {
     emailService.setSimulateFailure(true);
     
     const res = await fetch(`${API}/auth/forgot-password`, {
@@ -358,10 +369,6 @@ test('Phase 3 - Forgot Password and Reset Password Flow', async (t) => {
     assert.strictEqual(res.status, 200);
     const data = await res.json();
     assert.match(data.message, /If an account exists/);
-    
-    const user = await User.findById(userId).select('+passwordResetTokenHash +passwordResetExpiresAt');
-    assert.strictEqual(user.passwordResetTokenHash, null);
-    assert.strictEqual(user.passwordResetExpiresAt, null);
     
     emailService.setSimulateFailure(false);
   });

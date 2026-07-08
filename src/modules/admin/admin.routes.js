@@ -5,6 +5,7 @@ const authenticate = require('../../middlewares/auth.middleware');
 const { authorizePermission, authorizeRoles } = require('../../middlewares/role.middleware');
 const validateRequest = require('../../middlewares/validate-request.middleware');
 const adminController = require('./admin.controller');
+const adminJobsController = require('./admin-jobs.controller');
 const adminValidation = require('./admin.validation');
 
 const router = Router();
@@ -57,6 +58,24 @@ router.get(
   authorizePermission(Permissions.REQUEST_VIEW_ALL),
   validateRequest(adminValidation.getRequestDetails),
   adminController.getRequestDetails,
+);
+
+router.get(
+  '/jobs/dead-letter',
+  authorizePermission(Permissions.ADMIN_DASHBOARD), // Reusing dashboard permission for queue visibility
+  adminJobsController.listDeadLetters,
+);
+
+router.get(
+  '/jobs/dead-letter/:jobId',
+  authorizePermission(Permissions.ADMIN_DASHBOARD),
+  adminJobsController.getDeadLetterDetails,
+);
+
+router.post(
+  '/jobs/:jobId/replay',
+  authorizePermission(Permissions.ADMIN_DASHBOARD),
+  adminJobsController.replayDeadLetter,
 );
 
 module.exports = router;

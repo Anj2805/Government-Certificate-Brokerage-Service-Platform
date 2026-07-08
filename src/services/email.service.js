@@ -3,6 +3,9 @@ const config = require('../config');
 
 const capturedMessages = [];
 const capturedVerificationMessages = [];
+const capturedGenericMessages = []; // For idempotency checks
+
+const deliveredIdempotencyKeys = new Set(); // For idempotency checks
 
 const createTransport = () => {
   if (config.isProduction) {
@@ -119,6 +122,54 @@ const clearCapturedVerificationMessages = () => {
   capturedVerificationMessages.length = 0;
 };
 
+const getCapturedGenericMessages = () => {
+  if (config.isProduction) return [];
+  return [...capturedGenericMessages];
+};
+
+const clearCapturedGenericMessages = () => {
+  capturedGenericMessages.length = 0;
+  deliveredIdempotencyKeys.clear();
+};
+
+const sendEmail = async ({ to, subject, text, providerIdempotencyKey }) => {
+  if (simulateFailure) {
+    throw new Error('Simulated email delivery failure');
+  }
+
+  // Deduplicate using providerIdempotencyKey
+  if (!config.isProduction && providerIdempotencyKey) {
+    if (deliveredIdempotencyKeys.has(providerIdempotencyKey)) {
+      // Return a simulated success response because it was already sent
+      return { messageId: `idemp-sim-${providerIdempotencyKey}`, status: 'deduplicated' };
+    }
+  }
+
+  const transporter = createTransport();
+  const info = await transporter.sendMail({
+    from: config.email.from,
+    to,
+    subject,
+    text,
+  });
+
+  if (!config.isProduction) {
+    if (providerIdempotencyKey) {
+      deliveredIdempotencyKeys.add(providerIdempotencyKey);
+    }
+    capturedGenericMessages.push({
+      to,
+      subject,
+      text,
+      providerIdempotencyKey,
+      messageId: info.messageId,
+      sentAt: new Date(),
+    });
+  }
+
+  return info;
+};
+
 const setSimulateFailure = (value) => {
   if (!config.isProduction) {
     simulateFailure = value;
@@ -133,4 +184,7 @@ module.exports = {
   getCapturedVerificationMessages,
   clearCapturedVerificationMessages,
   setSimulateFailure,
+  sendEmail,
+  getCapturedGenericMessages,
+  clearCapturedGenericMessages,
 };

@@ -66,6 +66,39 @@ const createRequestNotification = async ({ recipientId, requestId, type, eventId
       metadata,
       deduplicationKey,
     });
+    // Additionally, queue an external delivery outbox event if the user has external notifications enabled (implicit for this phase).
+    const jobService = require('../jobs/job.service');
+    const User = require('../users/user.model');
+    const recipient = await User.findById(recipientId).select('+email');
+
+    if (recipient && recipient.email) {
+      await jobService.enqueueOutboxEvent({
+        eventType: type,
+        aggregateType: 'Request',
+        aggregateId: requestId,
+        idempotencyKey: `EXTERNAL_NOTIFICATION:${requestId}:${type}:${eventId}`,
+        payload: {
+          recipientId,
+          requestId,
+          type,
+          title,
+          message,
+        },
+        jobsToCreate: [
+          {
+            channel: 'EMAIL',
+            jobType: 'APPLICATION_NOTIFICATION',
+            recipientReference: recipient.email,
+            payload: {
+              title,
+              message,
+              type,
+            },
+          }
+        ]
+      });
+    }
+
   } catch (error) {
     if (error.code === 11000) {
       // Duplicate key error: race condition or repeated creation for same eventId.

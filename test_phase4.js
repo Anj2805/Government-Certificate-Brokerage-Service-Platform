@@ -55,6 +55,10 @@ test('Phase 4 - Email Verification Flow', async (t) => {
     // DB is already configured with _test suffix in config or env
     await mongoose.connect(config.database.uri);
     
+    // Clear jobs to prevent cross-test leakage
+    await mongoose.connection.collection('deliveryjobs').deleteMany({});
+    await mongoose.connection.collection('outboxevents').deleteMany({});
+    
     await new Promise((resolve) => {
       server = app.listen(0, () => {
         port = server.address().port;
@@ -94,6 +98,8 @@ test('Phase 4 - Email Verification Flow', async (t) => {
     assert.strictEqual(data.data.user.emailVerified, false);
     assert.strictEqual(data.data.user.emailVerificationTokenHash, undefined);
     
+    while (await require('./src/workers/delivery.worker').runOnce()) {}
+
     const messages = emailService.getCapturedVerificationMessages();
     assert.strictEqual(messages.length, 1);
     
@@ -125,6 +131,8 @@ test('Phase 4 - Email Verification Flow', async (t) => {
     assert.strictEqual(data.data.user.emailVerified, false);
     assert.strictEqual(data.data.user.agentStatus, 'pending');
     
+    while (await require('./src/workers/delivery.worker').runOnce()) {}
+
     const messages = emailService.getCapturedVerificationMessages();
     assert.strictEqual(messages.length, 1);
     
@@ -214,6 +222,9 @@ test('Phase 4 - Email Verification Flow', async (t) => {
     });
     
     assert.strictEqual(res.status, 200);
+
+    while (await require('./src/workers/delivery.worker').runOnce()) {}
+
     const messages = emailService.getCapturedVerificationMessages();
     assert.strictEqual(messages.length, 0); // Should not resend if verified
   });
@@ -235,6 +246,8 @@ test('Phase 4 - Email Verification Flow', async (t) => {
     const userAfter = await User.findById(agentId).select('+emailVerificationTokenHash');
     assert.notStrictEqual(userAfter.emailVerificationTokenHash, oldHash);
     
+    while (await require('./src/workers/delivery.worker').runOnce()) {}
+
     const messages = emailService.getCapturedVerificationMessages();
     assert.strictEqual(messages.length, 1);
     
@@ -251,6 +264,9 @@ test('Phase 4 - Email Verification Flow', async (t) => {
     });
     
     assert.strictEqual(res.status, 200);
+
+    while (await require('./src/workers/delivery.worker').runOnce()) {}
+
     const messages = emailService.getCapturedVerificationMessages();
     assert.strictEqual(messages.length, 0);
   });
@@ -276,7 +292,7 @@ test('Phase 4 - Email Verification Flow', async (t) => {
     assert.match(data.message, /Your agent account is pending approval/);
   });
 
-  await t.test('Email delivery failure gracefully clears fields and returns 200 in resend', async () => {
+  await t.test('Email delivery failure gracefully returns 200 in resend (Outbox handles retries)', async () => {
     // Demote agent back to unverified to test resend failure
     await User.findByIdAndUpdate(agentId, { emailVerified: false });
     
@@ -291,10 +307,6 @@ test('Phase 4 - Email Verification Flow', async (t) => {
     assert.strictEqual(res.status, 200);
     const data = await res.json();
     assert.match(data.message, /If an eligible account exists/);
-    
-    const user = await User.findById(agentId).select('+emailVerificationTokenHash +emailVerificationExpiresAt');
-    assert.strictEqual(user.emailVerificationTokenHash, null);
-    assert.strictEqual(user.emailVerificationExpiresAt, null);
     
     emailService.setSimulateFailure(false);
   });
