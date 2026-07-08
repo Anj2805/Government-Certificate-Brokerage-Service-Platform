@@ -118,7 +118,7 @@ export default function CitizenProfile() {
             Review your account details and update editable personal information.
           </p>
         </div>
-        <Link to={PATHS.CITIZEN_CHANGE_PASSWORD} className="h-11 px-5 rounded-lg border border-[#dbeafe] bg-white text-[#13448a] text-[13px] font-extrabold no-underline flex items-center justify-center">
+        <Link to={profile?.role === 'agent' ? PATHS.AGENT_CHANGE_PASSWORD : PATHS.CITIZEN_CHANGE_PASSWORD} className="h-11 px-5 rounded-lg border border-[#dbeafe] bg-white text-[#13448a] text-[13px] font-extrabold no-underline flex items-center justify-center">
           Change Password
         </Link>
       </div>

@@ -3,6 +3,7 @@ import DashboardLayout from '../layouts/DashboardLayout';
 import PublicLayout from '../layouts/PublicLayout';
 import AgentAssignedRequests from '../pages/agent/AssignedRequests';
 import AgentDashboard from '../pages/agent/Dashboard';
+import AgentRequestDetails from '../pages/agent/RequestDetails';
 import AdminDashboard from '../pages/admin/Dashboard';
 import ManageAgents from '../pages/admin/ManageAgents';
 import ManageRequests from '../pages/admin/ManageRequests';

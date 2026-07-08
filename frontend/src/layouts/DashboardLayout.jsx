@@ -383,8 +383,8 @@ export default function DashboardLayout() {
                     <div className="font-extrabold text-gray-900 truncate">{user?.firstName} {user?.lastName}</div>
                     <div className="text-[11px] text-gray-500 capitalize">Role: {user?.role}</div>
                   </div>
-                  {role === ROLES.CITIZEN ? (
-                    <Link role="menuitem" to={PATHS.CITIZEN_PROFILE} onClick={() => setProfileMenuOpen(false)} className="block px-4 py-2 hover:bg-gray-50 text-gray-700 no-underline">
+                  {(role === ROLES.CITIZEN || role === ROLES.AGENT) ? (
+                    <Link role="menuitem" to={role === ROLES.CITIZEN ? PATHS.CITIZEN_PROFILE : PATHS.AGENT_PROFILE} onClick={() => setProfileMenuOpen(false)} className="block px-4 py-2 hover:bg-gray-50 text-gray-700 no-underline">
                       Profile
                     </Link>
                   ) : null}

@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
+import { PATHS } from '../../config/paths';
 import { agentApi } from '../../api/agentApi';
 import { useAuth } from '../../hooks/useAuth';
 
 export default function AgentDashboard() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [requests, setRequests] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [stats, setStats] = useState({
@@ -275,7 +277,11 @@ export default function AgentDashboard() {
                 {filteredRequests.length > 0 ? (
                   filteredRequests.map((req, idx) => (
                     <tr key={req._id || idx} className="hover:bg-gray-50/30 transition-colors">
-                      <td className="px-6 py-4.5 font-bold text-[#13448a]">{req.requestNumber}</td>
+                      <td className="px-6 py-4.5 font-bold text-[#13448a]">
+                        <Link to={PATHS.AGENT_REQUEST_DETAILS.replace(':id', req._id)} className="hover:underline">
+                          {req.requestNumber}
+                        </Link>
+                      </td>
                       <td className="px-6 py-4.5 text-gray-800 font-bold">{req.citizen?.firstName} {req.citizen?.lastName}</td>
                       <td className="px-6 py-4.5">{req.serviceSnapshot?.serviceName || req.service?.name}</td>
                       <td className="px-6 py-4.5 text-gray-500 font-semibold">
@@ -368,6 +374,11 @@ export default function AgentDashboard() {
                 )}
               </tbody>
             </table>
+          </div>
+          <div className="px-6 py-4.5 bg-gray-50/50 border-t border-gray-100 text-center">
+            <Link to={PATHS.AGENT_ASSIGNED_REQUESTS} className="text-[13px] font-extrabold text-[#13448a] hover:underline">
+              View All Assigned Requests →
+            </Link>
           </div>
         </div>
 
