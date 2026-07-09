@@ -7,13 +7,17 @@ const logger = require('../config/logger');
 // Ensure storage root exists synchronously or on first load
 const storageRoot = uploadConfig.storageRoot;
 
+const provider = process.env.STORAGE_PROVIDER || 'local';
+
 const initializeStorage = async () => {
-  try {
+  if (provider === 'local') {
+    try {
     await fs.mkdir(storageRoot, { recursive: true });
     logger.info(`Storage root initialized at ${storageRoot}`);
   } catch (error) {
-    logger.fatal({ err: error }, 'Failed to initialize storage root');
-    throw error;
+      logger.fatal({ err: error }, 'Failed to initialize storage root');
+      throw error;
+    }
   }
 };
 
@@ -60,19 +64,22 @@ const generateStorageKey = (extension = '') => {
  */
 const save = async (tempFilePath, extension = '') => {
   const storageKey = generateStorageKey(extension);
-  const finalPath = getSafePath(storageKey);
-
-  try {
-    // Attempt atomic rename first (works if temp and storage are on the same filesystem)
-    await fs.rename(tempFilePath, finalPath);
-  } catch (error) {
-    if (error.code === 'EXDEV') {
-      // Cross-device link not permitted, fallback to copy + delete
-      await fs.copyFile(tempFilePath, finalPath);
-      await fs.unlink(tempFilePath).catch(() => {}); // Ignore cleanup error
-    } else {
-      throw error;
+  
+  if (provider === 'local') {
+    const finalPath = getSafePath(storageKey);
+    try {
+      await fs.rename(tempFilePath, finalPath);
+    } catch (error) {
+      if (error.code === 'EXDEV') {
+        await fs.copyFile(tempFilePath, finalPath);
+        await fs.unlink(tempFilePath).catch(() => {}); 
+      } else {
+        throw error;
+      }
     }
+  } else if (provider === 's3') {
+    // S3 Mock implementation - In real env this would use @aws-sdk/client-s3
+    logger.info(`S3 Mock: uploaded ${tempFilePath} to ${storageKey}`);
   }
 
   return storageKey;
@@ -82,12 +89,17 @@ const save = async (tempFilePath, extension = '') => {
  * Checks if a file exists in persistent storage.
  */
 const exists = async (storageKey) => {
-  try {
-    const filePath = getSafePath(storageKey);
-    await fs.access(filePath);
+  if (provider === 'local') {
+    try {
+      const filePath = getSafePath(storageKey);
+      await fs.access(filePath);
+      return true;
+    } catch {
+      return false;
+    }
+  } else if (provider === 's3') {
+    // S3 Mock implementation
     return true;
-  } catch {
-    return false;
   }
 };
 
@@ -96,16 +108,22 @@ const exists = async (storageKey) => {
  * Does not throw if the file is already missing.
  */
 const remove = async (storageKey) => {
-  try {
-    const filePath = getSafePath(storageKey);
-    await fs.unlink(filePath);
-    return true;
-  } catch (error) {
-    if (error.code === 'ENOENT') {
-      return true; // Already gone
+  if (provider === 'local') {
+    try {
+      const filePath = getSafePath(storageKey);
+      await fs.unlink(filePath);
+      return true;
+    } catch (error) {
+      if (error.code === 'ENOENT') {
+        return true; // Already gone
+      }
+      logger.error({ err: error, storageKey }, 'Failed to delete file from storage');
+      throw error;
     }
-    logger.error({ err: error, storageKey }, 'Failed to delete file from storage');
-    throw error;
+  } else if (provider === 's3') {
+    // S3 Mock implementation
+    logger.info(`S3 Mock: deleted ${storageKey}`);
+    return true;
   }
 };
 
@@ -114,14 +132,25 @@ const remove = async (storageKey) => {
  * IMPORTANT: This should ONLY be used for passing to internal APIs like res.download()
  * or content signature validators. It MUST NOT be exposed in API responses.
  */
-const getPhysicalPath = (storageKey) => {
-  return getSafePath(storageKey);
+const getDownloadStrategy = async (storageKey, originalName) => {
+  if (provider === 'local') {
+    return {
+      type: 'local',
+      physicalPath: getSafePath(storageKey)
+    };
+  } else if (provider === 's3') {
+    // S3 Mock implementation - Return a mock signed URL
+    return {
+      type: 'redirect',
+      url: `https://mock-s3-bucket.s3.amazonaws.com/${storageKey}?AWSAccessKeyId=MOCK&Signature=MOCK&Expires=MOCK`
+    };
+  }
 };
 
 module.exports = {
   save,
   exists,
   delete: remove,
-  getPhysicalPath,
+  getDownloadStrategy,
   generateStorageKey,
 };

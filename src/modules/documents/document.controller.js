@@ -91,13 +91,18 @@ const deleteDocument = asyncHandler(async (req, res) => {
 });
 
 const downloadDocument = asyncHandler(async (req, res) => {
-  const { document, physicalPath } = await documentService.downloadDocument(req.params.id, req.user);
+  const { document, strategy } = await documentService.downloadDocument(req.params.id, req.user);
 
-  res.setHeader('Content-Type', document.mimeType || 'application/octet-stream');
-  res.setHeader('Content-Disposition', `attachment; filename="${document.originalName}"`);
-  res.setHeader('X-Content-Type-Options', 'nosniff');
-
-  res.sendFile(physicalPath);
+  if (strategy.type === 'redirect') {
+    return res.redirect(strategy.url);
+  } else if (strategy.type === 'local') {
+    res.setHeader('Content-Type', document.mimeType || 'application/octet-stream');
+    res.setHeader('Content-Disposition', `attachment; filename="${document.originalName}"`);
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    return res.sendFile(strategy.physicalPath);
+  } else {
+    throw new Error('Unsupported download strategy');
+  }
 });
 
 module.exports = {

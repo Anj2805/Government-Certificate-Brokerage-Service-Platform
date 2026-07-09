@@ -280,13 +280,13 @@ const downloadDocument = async (documentId, user) => {
     throw new ApiError(httpStatus.NOT_FOUND, 'Document not found');
   }
 
-  const physicalPath = storageService.getPhysicalPath(document.path);
+  const strategy = await storageService.getDownloadStrategy(document.path, document.originalName);
 
   if (!await storageService.exists(document.path)) {
     throw new ApiError(httpStatus.NOT_FOUND, 'Document file not found on disk');
   }
 
-  return { document, physicalPath };
+  return { document, strategy };
 };
 
 const softDeleteDocument = async (documentId, user) => {
