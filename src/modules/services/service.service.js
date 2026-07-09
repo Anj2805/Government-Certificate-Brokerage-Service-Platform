@@ -113,6 +113,8 @@ const listServices = async (query, user = null) => {
     limit,
     search: query.search,
     category: query.category,
+    maxFee: query.maxFee,
+    timeFilters: query.timeFilters ? query.timeFilters.split(',') : [],
     includeInactive: isAdmin && query.includeInactive === true,
     includeDeleted: isAdmin && query.includeDeleted === true,
   });

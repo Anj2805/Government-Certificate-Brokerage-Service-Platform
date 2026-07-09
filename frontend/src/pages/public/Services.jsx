@@ -25,6 +25,8 @@ export default function Services() {
         page: currentPage,
         limit: 9,
         search: searchQuery || undefined,
+        maxFee: priceRange,
+        timeFilters: selectedTimes.length > 0 ? selectedTimes.join(',') : undefined
       });
       setServices(response.data.services);
       setTotalPages(response.meta.totalPages);
@@ -42,7 +44,7 @@ export default function Services() {
     }, searchQuery ? 300 : 0);
 
     return () => clearTimeout(delayDebounceFn);
-  }, [searchQuery, currentPage]);
+  }, [searchQuery, currentPage, priceRange, selectedTimes]);
 
   // Time filter criteria handler
   const handleTimeChange = (timeRange) => {
@@ -55,28 +57,8 @@ export default function Services() {
   };
 
   // Filter logic applied client-side on the retrieved page for processing time and fee range
-  const displayedServices = useMemo(() => {
-    return services.filter((service) => {
-      const charge = service.serviceCharge ?? 0;
-      const matchesPrice = charge <= priceRange;
-
-      const days = service.estimatedProcessingDays ?? 0;
-
-      if (selectedTimes.length === 0) {
-        return matchesPrice;
-      }
-
-      const matchesTime = selectedTimes.some((timeRange) => {
-        if (timeRange === '7d') return days <= 7;
-        if (timeRange === '1-2w') return days > 7 && days <= 14;
-        if (timeRange === '2-4w') return days > 14 && days <= 30;
-        if (timeRange === '1m+') return days > 30;
-        return false;
-      });
-
-      return matchesPrice && matchesTime;
-    });
-  }, [services, priceRange, selectedTimes]);
+  // Client-side filter removed as it broke pagination. We now pass filters directly to the backend API.
+  const displayedServices = services;
 
   return (
     <div className="min-h-screen flex flex-col bg-[#f8fafc] text-[#111827]">

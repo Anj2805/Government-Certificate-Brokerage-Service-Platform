@@ -28,4 +28,5 @@ export const PATHS = Object.freeze({
   ADMIN_REQUESTS: '/admin/requests',
   ADMIN_REQUEST_DETAILS: '/admin/requests/:id',
   ADMIN_DEAD_LETTERS: '/admin/dead-letters',
+  ADMIN_CHANGE_PASSWORD: '/admin/change-password',
 });

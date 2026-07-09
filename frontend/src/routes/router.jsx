@@ -80,6 +80,7 @@ const router = createBrowserRouter([
             children: [
               { path: PATHS.AGENT_DASHBOARD, element: <AgentDashboard /> },
               { path: PATHS.AGENT_ASSIGNED_REQUESTS, element: <AgentAssignedRequests /> },
+              { path: PATHS.AGENT_CHANGE_PASSWORD, element: <ChangePassword /> },
             ],
           },
           {
@@ -91,6 +92,7 @@ const router = createBrowserRouter([
               { path: PATHS.ADMIN_REQUESTS, element: <ManageRequests /> },
               { path: PATHS.ADMIN_REQUEST_DETAILS, element: <AdminRequestDetails /> },
               { path: PATHS.ADMIN_DEAD_LETTERS, element: <DeadLetterJobs /> },
+              { path: PATHS.ADMIN_CHANGE_PASSWORD, element: <ChangePassword /> },
             ],
           },
         ],

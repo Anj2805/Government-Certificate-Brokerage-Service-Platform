@@ -1,0 +1,80 @@
+TAP version 13
+# {"level":30,"time":"2026-07-09T12:13:06.937Z","msg":"Storage root initialized at /Users/anjalisinha/Desktop/Government Certificate & Brokerage Service Platform/storage"}
+# {"level":30,"time":"2026-07-09T12:13:06.975Z","msg":"MongoDB connection established"}
+# Subtest: Phase 9 - Reliable Background Jobs and Notifications
+    # Subtest: 1. Importing modules should not auto-start workers
+    ok 1 - 1. Importing modules should not auto-start workers
+      ---
+      duration_ms: 1.831667
+      type: 'test'
+      ...
+# {"level":30,"time":"2026-07-09T12:13:07.199Z","audit":true,"eventType":"OUTBOX_EVENT_CREATED","eventId":"6a4f90539f2614368ae1126e","idempotencyKey":"IDEMP_TEST_1","msg":"Outbox event and jobs durably created"}
+    # Subtest: 2. Should enqueue outbox event and job durably
+    ok 2 - 2. Should enqueue outbox event and job durably
+      ---
+      duration_ms: 68.004917
+      type: 'test'
+      ...
+# {"level":30,"time":"2026-07-09T12:13:07.304Z","audit":true,"eventType":"OUTBOX_EVENT_CREATED","eventId":"6a4f90539f2614368ae1126e","idempotencyKey":"IDEMP_TEST_1","msg":"Outbox event and jobs durably created"}
+    # Subtest: 3. Duplicate enqueueing should be idempotent
+    ok 3 - 3. Duplicate enqueueing should be idempotent
+      ---
+      duration_ms: 101.496791
+      type: 'test'
+      ...
+    # Subtest: 4. Atomic claiming: only one worker gets the job
+    ok 4 - 4. Atomic claiming: only one worker gets the job
+      ---
+      duration_ms: 25.344458
+      type: 'test'
+      ...
+# {"level":30,"time":"2026-07-09T12:13:07.384Z","audit":true,"eventType":"DELIVERY_JOB_SUCCEEDED","jobId":"6a4f90539f2614368ae11270","workerId":"worker-12671-kbw015b","msg":"Delivery job succeeded"}
+    # Subtest: 5. Worker should process job, send email, and clean up ciphertext on success
+    ok 5 - 5. Worker should process job, send email, and clean up ciphertext on success
+      ---
+      duration_ms: 39.601208
+      type: 'test'
+      ...
+# {"level":30,"time":"2026-07-09T12:13:07.409Z","audit":true,"eventType":"OUTBOX_EVENT_CREATED","eventId":"6a4f90539f2614368ae11284","idempotencyKey":"IDEMP_TEST_2","msg":"Outbox event and jobs durably created"}
+# {"level":30,"time":"2026-07-09T12:13:07.424Z","audit":true,"eventType":"DELIVERY_JOB_SUCCEEDED","jobId":"6a4f90539f2614368ae11286","workerId":"worker-12671-kbw015b","msg":"Delivery job succeeded"}
+    # Subtest: 6. Idempotency under provider success but DB failure (DB ACK FAILURE)
+    ok 6 - 6. Idempotency under provider success but DB failure (DB ACK FAILURE)
+      ---
+      duration_ms: 30.22675
+      type: 'test'
+      ...
+# {"level":30,"time":"2026-07-09T12:13:07.449Z","audit":true,"eventType":"OUTBOX_EVENT_CREATED","eventId":"6a4f90539f2614368ae1128e","idempotencyKey":"IDEMP_FAIL_1","msg":"Outbox event and jobs durably created"}
+# {"level":50,"time":"2026-07-09T12:13:07.468Z","audit":true,"eventType":"DELIVERY_JOB_DEAD_LETTERED","jobId":"6a4f90539f2614368ae11290","workerId":"worker-12671-kbw015b","err":"Unsupported jobType: INVALID_TYPE","msg":"Delivery job dead-lettered"}
+# {"level":40,"time":"2026-07-09T12:13:07.566Z","err":{"type":"ApiError","message":"You do not have permission to access this resource","stack":"ApiError: You do not have permission to access this resource\\n    at /Users/anjalisinha/Desktop/Government Certificate & Brokerage Service Platform/src/middlewares/role.middleware.js:16:13\\n    at Layer.handle [as handle_request] (/Users/anjalisinha/Desktop/Government Certificate & Brokerage Service Platform/node_modules/express/lib/router/layer.js:95:5)\\n    at trim_prefix (/Users/anjalisinha/Desktop/Government Certificate & Brokerage Service Platform/node_modules/express/lib/router/index.js:328:13)\\n    at /Users/anjalisinha/Desktop/Government Certificate & Brokerage Service Platform/node_modules/express/lib/router/index.js:286:9\\n    at Function.process_params (/Users/anjalisinha/Desktop/Government Certificate & Brokerage Service Platform/node_modules/express/lib/router/index.js:346:12)\\n    at next (/Users/anjalisinha/Desktop/Government Certificate & Brokerage Service Platform/node_modules/express/lib/router/index.js:280:10)\\n    at authenticate (/Users/anjalisinha/Desktop/Government Certificate & Brokerage Service Platform/src/middlewares/auth.middleware.js:43:12)\\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)","name":"ApiError","statusCode":403,"isOperational":true},"statusCode":403,"method":"GET","path":"/api/v1/admin/jobs/dead-letter","requestId":"5532da82-0a87-48f4-9aa2-fa733fd5ecef","msg":"You do not have permission to access this resource"}
+    # Subtest: 7. Dead-letter API replay logic and secret retention
+    not ok 7 - 7. Dead-letter API replay logic and secret retention
+      ---
+      duration_ms: 165.301833
+      type: 'test'
+      location: '/Users/anjalisinha/Desktop/Government Certificate & Brokerage Service Platform/test_phase9.js:198:3'
+      failureType: 'unhandledRejection'
+      error: 'Dead-letter job not found'
+      code: 'ERR_TEST_FAILURE'
+      name: 'ApiError'
+      stack: |-
+        replayDeadLetter (/Users/anjalisinha/Desktop/Government Certificate & Brokerage Service Platform/src/modules/admin/admin-jobs.controller.js:93:11)
+        process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+      ...
+# {"level":30,"time":"2026-07-09T12:13:07.615Z","modifiedCount":1,"msg":"Cleaned expired delivery secrets from dead letters"}
+    # Subtest: 8. Scheduler dead-letter cleanup
+    ok 8 - 8. Scheduler dead-letter cleanup
+      ---
+      duration_ms: 24.662791
+      type: 'test'
+      ...
+# {"level":40,"time":"2026-07-09T12:13:07.625Z","msg":"MongoDB connection disconnected"}
+    1..8
+not ok 1 - Phase 9 - Reliable Background Jobs and Notifications
+  ---
+  duration_ms: 749.297375
+  type: 'suite'
+  location: '/Users/anjalisinha/Desktop/Government Certificate & Brokerage Service Platform/test_phase9.js:19:1'
+  failureType: 'subtestsFailed'
+  error: '1 subtest failed'
+  code: 'ERR_TEST_FAILURE'
+  ...
