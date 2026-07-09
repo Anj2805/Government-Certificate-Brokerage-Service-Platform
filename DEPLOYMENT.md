@@ -9,7 +9,7 @@ To ensure Vercel reliably serves the Vite frontend SPA independently of the Expr
 - **Build Command**: `npm run build`
 - **Output Directory**: `dist`
 - **Required Env Variables**:
-  - `VITE_API_URL`: The production URL of the deployed Backend Project.
+  - `VITE_API_BASE_URL`: The production URL of the deployed Backend Project.
 
 ### 2. Backend Project
 - **Framework Preset**: Other / Node.js
