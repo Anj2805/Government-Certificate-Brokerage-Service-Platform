@@ -8,6 +8,10 @@ if (process.env.NODE_ENV === 'test') {
 
 const requiredEnv = ['MONGODB_URI', 'JWT_ACCESS_SECRET', 'JWT_REFRESH_SECRET'];
 
+if (process.env.NODE_ENV === 'production') {
+  requiredEnv.push('DELIVERY_SECRET_ENCRYPTION_KEY');
+}
+
 const missingEnv = requiredEnv.filter((key) => !process.env[key]);
 
 if (missingEnv.length > 0) {
@@ -104,6 +108,6 @@ module.exports = {
     correctionReminderAfterDays: parseNumber(process.env.CORRECTION_REMINDER_AFTER_DAYS, 3),
   },
   encryption: {
-    deliverySecretKey: process.env.DELIVERY_SECRET_ENCRYPTION_KEY || '0123456789abcdef0123456789abcdef', // 32 chars for testing
+    deliverySecretKey: process.env.DELIVERY_SECRET_ENCRYPTION_KEY || '0123456789abcdef0123456789abcdef',
   },
 };

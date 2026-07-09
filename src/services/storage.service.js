@@ -3,11 +3,26 @@ const path = require('path');
 const crypto = require('crypto');
 const uploadConfig = require('../config/upload');
 const logger = require('../config/logger');
+const { S3Client, PutObjectCommand, DeleteObjectCommand, HeadObjectCommand } = require('@aws-sdk/client-s3');
+const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
 
 // Ensure storage root exists synchronously or on first load
 const storageRoot = uploadConfig.storageRoot;
 
 const provider = process.env.STORAGE_PROVIDER || 'local';
+
+let s3Client = null;
+if (provider === 's3') {
+  s3Client = new S3Client({
+    region: process.env.S3_REGION,
+    endpoint: process.env.S3_ENDPOINT || undefined,
+    credentials: {
+      accessKeyId: process.env.S3_ACCESS_KEY_ID,
+      secretAccessKey: process.env.S3_SECRET_ACCESS_KEY,
+    },
+    forcePathStyle: process.env.S3_FORCE_PATH_STYLE === 'true',
+  });
+}
 
 const initializeStorage = async () => {
   if (provider === 'local') {
@@ -64,7 +79,7 @@ const generateStorageKey = (extension = '') => {
  */
 const save = async (tempFilePath, extension = '') => {
   const storageKey = generateStorageKey(extension);
-  
+
   if (provider === 'local') {
     const finalPath = getSafePath(storageKey);
     try {
@@ -72,14 +87,20 @@ const save = async (tempFilePath, extension = '') => {
     } catch (error) {
       if (error.code === 'EXDEV') {
         await fs.copyFile(tempFilePath, finalPath);
-        await fs.unlink(tempFilePath).catch(() => {}); 
+        await fs.unlink(tempFilePath).catch(() => {});
       } else {
         throw error;
       }
     }
   } else if (provider === 's3') {
-    // S3 Mock implementation - In real env this would use @aws-sdk/client-s3
-    logger.info(`S3 Mock: uploaded ${tempFilePath} to ${storageKey}`);
+    const fileBuffer = await fs.readFile(tempFilePath);
+    const command = new PutObjectCommand({
+      Bucket: process.env.S3_BUCKET,
+      Key: storageKey,
+      Body: fileBuffer,
+    });
+    await s3Client.send(command);
+    await fs.unlink(tempFilePath).catch(() => {});
   }
 
   return storageKey;
@@ -98,8 +119,19 @@ const exists = async (storageKey) => {
       return false;
     }
   } else if (provider === 's3') {
-    // S3 Mock implementation
-    return true;
+    try {
+      const command = new HeadObjectCommand({
+        Bucket: process.env.S3_BUCKET,
+        Key: storageKey,
+      });
+      await s3Client.send(command);
+      return true;
+    } catch (error) {
+      if (error.name === 'NotFound' || error.$metadata?.httpStatusCode === 404) {
+        return false;
+      }
+      throw error;
+    }
   }
 };
 
@@ -121,9 +153,17 @@ const remove = async (storageKey) => {
       throw error;
     }
   } else if (provider === 's3') {
-    // S3 Mock implementation
-    logger.info(`S3 Mock: deleted ${storageKey}`);
-    return true;
+    try {
+      const command = new DeleteObjectCommand({
+        Bucket: process.env.S3_BUCKET,
+        Key: storageKey,
+      });
+      await s3Client.send(command);
+      return true;
+    } catch (error) {
+      logger.error({ err: error, storageKey }, 'Failed to delete file from S3');
+      throw error;
+    }
   }
 };
 
@@ -139,10 +179,23 @@ const getDownloadStrategy = async (storageKey, originalName) => {
       physicalPath: getSafePath(storageKey)
     };
   } else if (provider === 's3') {
-    // S3 Mock implementation - Return a mock signed URL
+    const command = new HeadObjectCommand({ // We actually need GetObjectCommand for presigning, wait!
+      Bucket: process.env.S3_BUCKET,
+      Key: storageKey,
+      ResponseContentDisposition: `attachment; filename="${originalName}"`
+    });
+    // Let's fix this import above or just require it here
+    const { GetObjectCommand } = require('@aws-sdk/client-s3');
+    const getCommand = new GetObjectCommand({
+      Bucket: process.env.S3_BUCKET,
+      Key: storageKey,
+      ResponseContentDisposition: `attachment; filename="${originalName}"`
+    });
+
+    const url = await getSignedUrl(s3Client, getCommand, { expiresIn: 3600 });
     return {
       type: 'redirect',
-      url: `https://mock-s3-bucket.s3.amazonaws.com/${storageKey}?AWSAccessKeyId=MOCK&Signature=MOCK&Expires=MOCK`
+      url
     };
   }
 };

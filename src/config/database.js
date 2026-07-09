@@ -26,6 +26,8 @@ const connectDatabase = async () => {
 
   mongoose.connection.on('disconnected', () => {
     logger.warn('MongoDB connection disconnected');
+    cached.conn = null;
+    cached.promise = null;
   });
 
     cached.promise = mongoose.connect(config.database.uri, {
