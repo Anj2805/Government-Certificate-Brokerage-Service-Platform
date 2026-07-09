@@ -1,138 +1,100 @@
-import { useState } from 'react';
-
-const INITIAL_AGENTS = [
-  { 
-    id: "SS-AG-782", 
-    name: "Rajesh Kumar", 
-    email: "rajesh.kumar@sevasetu.gov.in", 
-    phone: "+91 98765 43210",
-    department: "Revenue Department", 
-    status: "Approved", 
-    joinedDate: "Oct 10, 2023",
-    avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=facearea&facepad=2&w=128&h=128&q=80",
-    idProof: "Aadhaar Card Verified",
-    govBadge: "Badge ID: REV-981",
-    experience: "5 Years Public Admin"
-  },
-  { 
-    id: "SS-AG-903", 
-    name: "Priya Sharma", 
-    email: "priya.sharma@sevasetu.gov.in", 
-    phone: "+91 98765 43211",
-    department: "Revenue Department", 
-    status: "Approved", 
-    joinedDate: "Nov 01, 2023",
-    avatar: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=facearea&facepad=2&w=128&h=128&q=80",
-    idProof: "Voter ID Verified",
-    govBadge: "Badge ID: REV-439",
-    experience: "3 Years Municipal Officer"
-  },
-  { 
-    id: "SS-AG-114", 
-    name: "Anil Deshmukh", 
-    email: "anil.deshmukh@sevasetu.gov.in", 
-    phone: "+91 98765 43212",
-    department: "Health & Family Welfare", 
-    status: "Pending Approval", 
-    joinedDate: "Dec 12, 2023",
-    avatar: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=facearea&facepad=2&w=128&h=128&q=80",
-    idProof: "Aadhaar Card Submitted",
-    govBadge: "Pending Issuance",
-    experience: "4 Years Health Inspector"
-  },
-  { 
-    id: "SS-AG-250", 
-    name: "Sunita Verma", 
-    email: "sunita.verma@sevasetu.gov.in", 
-    phone: "+91 98765 43213",
-    department: "Social Justice & Empowerment", 
-    status: "Approved", 
-    joinedDate: "Jan 03, 2024",
-    avatar: "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?auto=format&fit=facearea&facepad=2&w=128&h=128&q=80",
-    idProof: "Passport Verified",
-    govBadge: "Badge ID: SJE-210",
-    experience: "6 Years Social worker"
-  },
-  { 
-    id: "SS-AG-305", 
-    name: "Vikram Malhotra", 
-    email: "vikram.malhotra@sevasetu.gov.in", 
-    phone: "+91 98765 43214",
-    department: "Income Tax Department", 
-    status: "Suspended", 
-    joinedDate: "Feb 18, 2024",
-    avatar: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=facearea&facepad=2&w=128&h=128&q=80",
-    idProof: "Aadhaar Card Verified",
-    govBadge: "Badge ID: ITD-032",
-    experience: "8 Years Tax Assessor"
-  }
-];
+import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
+import { adminApi } from '../../api/adminApi';
 
 export default function ManageAgents() {
-  const [agents, setAgents] = useState(INITIAL_AGENTS);
+  const [agents, setAgents] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalItems, setTotalItems] = useState(0);
+  const itemsPerPage = 10;
 
   // Detail Modal state
   const [selectedAgent, setSelectedAgent] = useState(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
 
-  const handleApprove = (agentId) => {
-    setAgents(prev => prev.map(ag => {
-      if (ag.id === agentId) {
-        alert(`Approved agent: ${ag.name}`);
-        const updated = { ...ag, status: "Approved" };
-        if (selectedAgent && selectedAgent.id === agentId) {
-          setSelectedAgent(updated);
-        }
-        return updated;
-      }
-      return ag;
-    }));
+  const fetchAgents = async () => {
+    setIsLoading(true);
+    try {
+      const response = await adminApi.listAgents({ page: currentPage, limit: itemsPerPage });
+      setAgents(response.data?.agents || []);
+      const meta = response.meta || {};
+      setTotalPages(meta.totalPages || 1);
+      setTotalItems(meta.total || (response.data?.agents || []).length);
+    } catch (err) {
+      console.error(err);
+      alert('Failed to load agents.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const handleReject = (agentId) => {
-    setAgents(prev => prev.map(ag => {
-      if (ag.id === agentId) {
-        alert(`Rejected agent registration: ${ag.name}`);
-        const updated = { ...ag, status: "Rejected" };
-        if (selectedAgent && selectedAgent.id === agentId) {
-          setSelectedAgent(updated);
-        }
-        return updated;
-      }
-      return ag;
-    }));
+  useEffect(() => {
+    fetchAgents();
+  }, [currentPage]);
+
+  const handleApprove = async (agentId) => {
+    try {
+      await adminApi.approveAgent(agentId);
+      alert('Agent approved successfully.');
+      fetchAgents();
+      setShowDetailModal(false);
+    } catch (err) {
+      alert(err?.response?.data?.message || 'Failed to approve agent');
+    }
   };
 
-  const handleSuspend = (agentId) => {
-    setAgents(prev => prev.map(ag => {
-      if (ag.id === agentId) {
-        alert(`Suspended agent access: ${ag.name}`);
-        const updated = { ...ag, status: "Suspended" };
-        if (selectedAgent && selectedAgent.id === agentId) {
-          setSelectedAgent(updated);
-        }
-        return updated;
-      }
-      return ag;
-    }));
+  const handleReject = async (agentId) => {
+    const reason = window.prompt("Enter rejection reason:");
+    if (reason === null) return;
+    try {
+      await adminApi.rejectAgent(agentId, reason);
+      alert('Agent rejected successfully.');
+      fetchAgents();
+      setShowDetailModal(false);
+    } catch (err) {
+      alert(err?.response?.data?.message || 'Failed to reject agent');
+    }
   };
 
-  // Filter list
+  const handleSuspend = async (agentId) => {
+    const reason = window.prompt("Enter suspension reason:");
+    if (reason === null) return;
+    try {
+      await adminApi.suspendAgent(agentId, reason);
+      alert('Agent suspended successfully.');
+      fetchAgents();
+      setShowDetailModal(false);
+    } catch (err) {
+      alert(err?.response?.data?.message || 'Failed to suspend agent');
+    }
+  };
+
+  // Filter list (client-side for search term, although the API supports server side search)
   const filteredAgents = agents.filter(ag => {
-    const matchesSearch = ag.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          ag.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          ag.department.toLowerCase().includes(searchTerm.toLowerCase());
-    
-    const matchesStatus = statusFilter === "All" || ag.status === statusFilter;
+    const matchesSearch = (ag.firstName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+                          (ag.lastName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+                          ag.email.toLowerCase().includes(searchTerm.toLowerCase());
+
+    const matchesStatus = statusFilter === "All" || ag.agentStatus === statusFilter.toLowerCase();
     return matchesSearch && matchesStatus;
   });
+
+  const paginate = (pageNumber) => {
+    if (pageNumber >= 1 && pageNumber <= totalPages) {
+      setCurrentPage(pageNumber);
+    }
+  };
+
+
 
   return (
     <div className="flex flex-col min-h-screen text-[#111827]">
       <div className="max-w-[1344px] w-full mx-auto px-6 py-8 flex-1 space-y-8">
-        
+
         {/* Header Title */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
@@ -145,7 +107,7 @@ export default function ManageAgents() {
           </div>
 
           <div className="inline-flex h-11 items-center px-4 rounded-lg bg-gray-50 border border-gray-200 text-[13px] font-bold text-gray-600">
-            Total Registrations: {agents.length}
+            Total Registrations: {totalItems}
           </div>
         </div>
 
@@ -208,42 +170,47 @@ export default function ManageAgents() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 text-[13px] font-semibold text-gray-600">
-                {filteredAgents.length > 0 ? (
+                {isLoading ? (
+                  <tr>
+                    <td colSpan="6" className="px-6 py-12 text-center">
+                      <div className="h-8 w-8 border-4 border-[#13448a] border-t-transparent rounded-full animate-spin mx-auto"></div>
+                      <p className="mt-3 text-[13px] font-bold text-gray-500">Loading agents...</p>
+                    </td>
+                  </tr>
+                ) : filteredAgents.length > 0 ? (
                   filteredAgents.map((ag, idx) => (
                     <tr key={idx} className="hover:bg-gray-50/30 transition-colors">
                       <td className="px-6 py-4.5">
                         <div className="flex items-center gap-3">
-                          <img
-                            src={ag.avatar}
-                            alt={ag.name}
-                            className="h-10 w-10 rounded-full object-cover border border-gray-150 shrink-0"
-                          />
+                          <div className="h-10 w-10 rounded-full bg-[#eff6ff] text-[#13448a] flex items-center justify-center text-[14px] font-extrabold border border-blue-100 shrink-0">
+                            {(ag.firstName?.[0] || 'A').toUpperCase()}{(ag.lastName?.[0] || '').toUpperCase()}
+                          </div>
                           <div>
-                            <span className="font-extrabold text-gray-800 block">{ag.name}</span>
+                            <span className="font-extrabold text-gray-800 block">{ag.firstName} {ag.lastName}</span>
                             <span className="text-[11.5px] text-gray-400 font-bold block mt-0.5">{ag.email}</span>
                           </div>
                         </div>
                       </td>
-                      <td className="px-6 py-4.5 font-bold text-[#13448a]">{ag.id}</td>
-                      <td className="px-6 py-4.5 text-gray-700">{ag.department}</td>
-                      <td className="px-6 py-4.5 text-gray-500">{ag.joinedDate}</td>
+                      <td className="px-6 py-4.5 font-bold text-[#13448a]">{ag._id.substring(0, 8)}...</td>
+                      <td className="px-6 py-4.5 text-gray-700">Central Services</td>
+                      <td className="px-6 py-4.5 text-gray-500">{new Date(ag.createdAt).toLocaleDateString()}</td>
                       <td className="px-6 py-4.5">
-                        {ag.status === "Approved" && (
+                        {ag.agentStatus === "approved" && (
                           <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10.5px] font-extrabold border bg-emerald-50 text-emerald-700 border-emerald-100">
                             Approved
                           </span>
                         )}
-                        {ag.status === "Pending Approval" && (
+                        {ag.agentStatus === "pending" && (
                           <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10.5px] font-extrabold border bg-blue-50 text-blue-700 border-blue-100">
                             Pending
                           </span>
                         )}
-                        {ag.status === "Suspended" && (
+                        {ag.agentStatus === "suspended" && (
                           <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10.5px] font-extrabold border bg-amber-50 text-amber-700 border-amber-100">
                             Suspended
                           </span>
                         )}
-                        {ag.status === "Rejected" && (
+                        {ag.agentStatus === "rejected" && (
                           <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10.5px] font-extrabold border bg-red-50 text-red-700 border-red-100">
                             Rejected
                           </span>
@@ -260,28 +227,28 @@ export default function ManageAgents() {
                         >
                           View Credentials
                         </button>
-                        
-                        {ag.status === "Pending Approval" ? (
+
+                        {ag.agentStatus === "pending" ? (
                           <>
                             <button
                               type="button"
-                              onClick={() => handleApprove(ag.id)}
+                              onClick={() => handleApprove(ag._id)}
                               className="h-8 px-3 rounded bg-emerald-600 hover:bg-emerald-700 text-[11.5px] font-bold text-white transition-colors"
                             >
                               Approve
                             </button>
                             <button
                               type="button"
-                              onClick={() => handleReject(ag.id)}
+                              onClick={() => handleReject(ag._id)}
                               className="h-8 px-3 rounded bg-red-600 hover:bg-red-700 text-[11.5px] font-bold text-white transition-colors"
                             >
                               Reject
                             </button>
                           </>
-                        ) : ag.status === "Approved" ? (
+                        ) : ag.agentStatus === "approved" ? (
                           <button
                             type="button"
-                            onClick={() => handleSuspend(ag.id)}
+                            onClick={() => handleSuspend(ag._id)}
                             className="h-8 px-3 rounded border border-amber-200 hover:bg-amber-50 text-[11.5px] font-bold text-amber-600 hover:text-amber-700 transition-all"
                           >
                             Suspend
@@ -289,7 +256,7 @@ export default function ManageAgents() {
                         ) : (
                           <button
                             type="button"
-                            onClick={() => handleApprove(ag.id)}
+                            onClick={() => handleApprove(ag._id)}
                             className="h-8 px-3 rounded border border-emerald-200 hover:bg-emerald-50 text-[11.5px] font-bold text-emerald-600 hover:text-emerald-700 transition-all"
                           >
                             Re-Approve
@@ -308,6 +275,48 @@ export default function ManageAgents() {
               </tbody>
             </table>
           </div>
+
+          {/* Pagination Footer */}
+          {!isLoading && agents.length > 0 && (
+            <div className="px-6 py-4.5 bg-gray-50/50 border-t border-gray-100 flex items-center justify-between flex-wrap gap-4 text-[12.5px] font-bold text-gray-400">
+              <span>
+                Showing <span className="text-gray-700">{totalItems === 0 ? 0 : (currentPage - 1) * itemsPerPage + 1}-{Math.min(currentPage * itemsPerPage, totalItems)}</span> of <span className="text-gray-700">{totalItems}</span> agents
+              </span>
+
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => paginate(currentPage - 1)}
+                  disabled={currentPage === 1}
+                  className="h-8 px-3.5 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 text-[12px] font-extrabold text-gray-700 disabled:opacity-40 disabled:hover:bg-white transition-colors"
+                >
+                  ‹ Prev
+                </button>
+                {Array.from({ length: totalPages }).map((_, idx) => (
+                  <button
+                    key={idx}
+                    type="button"
+                    onClick={() => paginate(idx + 1)}
+                    className={`h-8 w-8 rounded-lg text-[12px] font-extrabold transition-colors ${
+                      currentPage === idx + 1
+                        ? 'bg-[#13448a] text-white shadow-sm'
+                        : 'border border-gray-200 bg-white hover:bg-gray-50 text-gray-700'
+                    }`}
+                  >
+                    {idx + 1}
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => paginate(currentPage + 1)}
+                  disabled={currentPage === totalPages}
+                  className="h-8 px-3.5 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 text-[12px] font-extrabold text-gray-700 disabled:opacity-40 disabled:hover:bg-white transition-colors"
+                >
+                  Next ›
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
       </div>
@@ -323,26 +332,24 @@ export default function ManageAgents() {
 
             {/* Profile Overview */}
             <div className="flex items-center gap-4 border-b border-gray-50 pb-5">
-              <img
-                src={selectedAgent.avatar}
-                alt={selectedAgent.name}
-                className="h-16 w-16 rounded-full object-cover border border-gray-150 shrink-0"
-              />
+              <div className="h-16 w-16 rounded-full bg-[#eff6ff] text-[#13448a] flex items-center justify-center text-[22px] font-extrabold border border-blue-100 shrink-0">
+                {(selectedAgent.firstName?.[0] || 'A').toUpperCase()}{(selectedAgent.lastName?.[0] || '').toUpperCase()}
+              </div>
               <div>
-                <h4 className="text-[18px] font-extrabold text-gray-800">{selectedAgent.name}</h4>
-                <p className="text-[12.5px] font-bold text-[#13448a] mt-0.5">{selectedAgent.department}</p>
+                <h4 className="text-[18px] font-extrabold text-gray-800">{selectedAgent.firstName} {selectedAgent.lastName}</h4>
+                <p className="text-[12.5px] font-bold text-[#13448a] mt-0.5">Central Services</p>
                 <div className="mt-1.5 flex items-center gap-2">
-                  <span className="text-[11.5px] text-gray-400 font-semibold">ID: {selectedAgent.id}</span>
+                  <span className="text-[11.5px] text-gray-400 font-semibold">ID: {selectedAgent._id.substring(0, 8)}</span>
                   <span className={`inline-flex px-2 py-0.5 rounded text-[10px] font-extrabold uppercase tracking-wide border ${
-                    selectedAgent.status === "Approved"
+                    selectedAgent.agentStatus === "approved"
                       ? "bg-emerald-50 text-emerald-700 border-emerald-100"
-                      : selectedAgent.status === "Pending Approval"
+                      : selectedAgent.agentStatus === "pending"
                         ? "bg-blue-50 text-blue-700 border-blue-100"
-                        : selectedAgent.status === "Suspended"
+                        : selectedAgent.agentStatus === "suspended"
                           ? "bg-amber-50 text-amber-700 border-amber-100"
                           : "bg-red-50 text-red-700 border-red-100"
                   }`}>
-                    {selectedAgent.status}
+                    {selectedAgent.agentStatus}
                   </span>
                 </div>
               </div>
@@ -356,19 +363,11 @@ export default function ManageAgents() {
               </div>
               <div>
                 <span className="text-[10px] text-gray-450 block uppercase tracking-wider">Contact Phone</span>
-                <span className="block mt-0.5 text-gray-800 font-bold">{selectedAgent.phone}</span>
-              </div>
-              <div>
-                <span className="text-[10px] text-gray-450 block uppercase tracking-wider">Verification ID Paperwork</span>
-                <span className="block mt-0.5 text-gray-850 font-bold">{selectedAgent.idProof}</span>
-              </div>
-              <div>
-                <span className="text-[10px] text-gray-450 block uppercase tracking-wider">Government Authorization badge</span>
-                <span className="block mt-0.5 text-gray-850 font-bold">{selectedAgent.govBadge}</span>
+                <span className="block mt-0.5 text-gray-800 font-bold">{selectedAgent.phone || 'N/A'}</span>
               </div>
               <div className="col-span-2">
-                <span className="text-[10px] text-gray-450 block uppercase tracking-wider">Professional Experience</span>
-                <span className="block mt-0.5 text-gray-850 font-bold">{selectedAgent.experience}</span>
+                <span className="text-[10px] text-gray-450 block uppercase tracking-wider">Joined Date</span>
+                <span className="block mt-0.5 text-gray-850 font-bold">{new Date(selectedAgent.createdAt).toLocaleDateString()}</span>
               </div>
             </div>
 
@@ -384,31 +383,31 @@ export default function ManageAgents() {
               </div>
 
               <div className="flex gap-2">
-                {selectedAgent.status === "Pending Approval" ? (
+                {selectedAgent.agentStatus === "pending" ? (
                   <>
                     <button
-                      onClick={() => handleReject(selectedAgent.id)}
+                      onClick={() => handleReject(selectedAgent._id)}
                       className="h-10 px-4 bg-red-650 hover:bg-red-750 text-[12.5px] font-bold text-white rounded-lg transition-colors"
                     >
                       Reject
                     </button>
                     <button
-                      onClick={() => handleApprove(selectedAgent.id)}
+                      onClick={() => handleApprove(selectedAgent._id)}
                       className="h-10 px-4 bg-emerald-600 hover:bg-emerald-700 text-[12.5px] font-bold text-white rounded-lg transition-colors"
                     >
                       Approve
                     </button>
                   </>
-                ) : selectedAgent.status === "Approved" ? (
+                ) : selectedAgent.agentStatus === "approved" ? (
                   <button
-                    onClick={() => handleSuspend(selectedAgent.id)}
+                    onClick={() => handleSuspend(selectedAgent._id)}
                     className="h-10 px-4 bg-amber-600 hover:bg-amber-700 text-[12.5px] font-bold text-white rounded-lg transition-colors"
                   >
                     Suspend Account
                   </button>
                 ) : (
                   <button
-                    onClick={() => handleApprove(selectedAgent.id)}
+                    onClick={() => handleApprove(selectedAgent._id)}
                     className="h-10 px-4 bg-emerald-600 hover:bg-emerald-700 text-[12.5px] font-bold text-white rounded-lg transition-colors"
                   >
                     Re-Approve Account

@@ -3,6 +3,30 @@ const { DeliveryJob, JobStatus } = require('../jobs/delivery-job.model');
 const ApiError = require('../../common/errors/api-error');
 const logger = require('../../config/logger');
 
+const serializeSafeJob = (job) => {
+  const now = new Date();
+  return {
+    _id: job._id,
+    jobType: job.jobType,
+    channel: job.channel,
+    status: job.status,
+    attemptCount: job.attemptCount,
+    maxAttempts: job.maxAttempts,
+    availableAt: job.availableAt,
+    lastAttemptAt: job.lastAttemptAt,
+    completedAt: job.completedAt,
+    deadLetteredAt: job.deadLetteredAt,
+    lastErrorCode: job.lastErrorCode,
+    lastErrorMessageSafe: job.lastErrorMessageSafe,
+    recipientReference: job.recipientReference, // Safe email
+    createdAt: job.createdAt,
+    updatedAt: job.updatedAt,
+    lockedAt: job.lockedAt,
+    lockedBy: job.lockedBy,
+    replayable: !job.secretExpiresAt || new Date(job.secretExpiresAt) > now,
+  };
+};
+
 const listDeadLetters = async (req, res) => {
   const page = Math.max(1, parseInt(req.query.page) || 1);
   const limit = Math.min(Math.max(1, parseInt(req.query.limit) || 20), 100);
@@ -19,7 +43,6 @@ const listDeadLetters = async (req, res) => {
 
   const [jobs, total] = await Promise.all([
     DeliveryJob.find(query)
-      .select('-encryptedSecret -__v') // Never expose secret material
       .sort({ deadLetteredAt: -1 })
       .skip(skip)
       .limit(limit)
@@ -27,12 +50,7 @@ const listDeadLetters = async (req, res) => {
     DeliveryJob.countDocuments(query),
   ]);
 
-  // Add replayable boolean flag
-  const now = new Date();
-  const safeJobs = jobs.map((job) => ({
-    ...job,
-    replayable: !job.secretExpiresAt || new Date(job.secretExpiresAt) > now,
-  }));
+  const safeJobs = jobs.map(serializeSafeJob);
 
   res.status(httpStatus.OK).json({
     success: true,
@@ -52,18 +70,15 @@ const getDeadLetterDetails = async (req, res) => {
   const job = await DeliveryJob.findOne({
     _id: req.params.jobId,
     status: JobStatus.DEAD_LETTER,
-  }).select('-encryptedSecret -__v').lean();
+  }).lean();
 
   if (!job) {
     throw new ApiError(httpStatus.NOT_FOUND, 'Dead-letter job not found');
   }
 
-  const now = new Date();
-  job.replayable = !job.secretExpiresAt || new Date(job.secretExpiresAt) > now;
-
   res.status(httpStatus.OK).json({
     success: true,
-    data: { job },
+    data: { job: serializeSafeJob(job) },
   });
 };
 
@@ -108,9 +123,8 @@ const replayDeadLetter = async (req, res) => {
 
   logger.info({ audit: true, eventType: 'DEAD_LETTER_REPLAYED', actorId: req.user.id, jobId: updatedJob._id }, 'Dead-letter job replayed');
 
-  // Strip secret from response
-  const safeJob = updatedJob.toObject();
-  delete safeJob.encryptedSecret;
+  // Strip secret and unsafe fields from response
+  const safeJob = serializeSafeJob(updatedJob);
 
   res.status(httpStatus.OK).json({
     success: true,

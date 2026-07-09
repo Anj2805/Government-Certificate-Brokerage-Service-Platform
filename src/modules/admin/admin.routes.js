@@ -7,6 +7,7 @@ const validateRequest = require('../../middlewares/validate-request.middleware')
 const adminController = require('./admin.controller');
 const adminJobsController = require('./admin-jobs.controller');
 const adminValidation = require('./admin.validation');
+const asyncHandler = require('../../utils/async-handler');
 
 const router = Router();
 
@@ -63,19 +64,19 @@ router.get(
 router.get(
   '/jobs/dead-letter',
   authorizePermission(Permissions.ADMIN_DASHBOARD), // Reusing dashboard permission for queue visibility
-  adminJobsController.listDeadLetters,
+  asyncHandler(adminJobsController.listDeadLetters),
 );
 
 router.get(
   '/jobs/dead-letter/:jobId',
   authorizePermission(Permissions.ADMIN_DASHBOARD),
-  adminJobsController.getDeadLetterDetails,
+  asyncHandler(adminJobsController.getDeadLetterDetails),
 );
 
 router.post(
   '/jobs/:jobId/replay',
   authorizePermission(Permissions.ADMIN_DASHBOARD),
-  adminJobsController.replayDeadLetter,
+  asyncHandler(adminJobsController.replayDeadLetter),
 );
 
 module.exports = router;

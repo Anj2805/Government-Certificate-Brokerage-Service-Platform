@@ -9,6 +9,7 @@ import ManageAgents from '../pages/admin/ManageAgents';
 import ManageRequests from '../pages/admin/ManageRequests';
 import ManageServices from '../pages/admin/ManageServices';
 import AdminRequestDetails from '../pages/admin/RequestDetails';
+import DeadLetterJobs from '../pages/admin/DeadLetterJobs';
 import CitizenDashboard from '../pages/citizen/Dashboard';
 import CreateRequest from '../pages/citizen/CreateRequest';
 import CitizenProfile from '../pages/citizen/Profile';
@@ -89,6 +90,7 @@ const router = createBrowserRouter([
               { path: PATHS.ADMIN_AGENTS, element: <ManageAgents /> },
               { path: PATHS.ADMIN_REQUESTS, element: <ManageRequests /> },
               { path: PATHS.ADMIN_REQUEST_DETAILS, element: <AdminRequestDetails /> },
+              { path: PATHS.ADMIN_DEAD_LETTERS, element: <DeadLetterJobs /> },
             ],
           },
         ],

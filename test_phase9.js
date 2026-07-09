@@ -19,6 +19,8 @@ const cryptoUtil = require('./src/utils/crypto.util');
 describe('Phase 9 - Reliable Background Jobs and Notifications', () => {
   let adminToken;
   let adminUser;
+  let citizenToken;
+  let citizenUser;
   let testUserId;
   let testEventId;
 
@@ -45,6 +47,17 @@ describe('Phase 9 - Reliable Background Jobs and Notifications', () => {
     });
     const { signAccessToken } = require('./src/modules/auth/jwt.util');
     adminToken = signAccessToken(adminUser);
+
+    citizenUser = await User.create({
+      firstName: 'Citizen',
+      lastName: 'User',
+      email: 'citizen_phase9@example.com',
+      password: 'StrongPassword123!',
+      role: UserRoles.CITIZEN,
+      isActive: true,
+      emailVerified: true,
+    });
+    citizenToken = signAccessToken(citizenUser);
   });
 
   after(async () => {
@@ -216,7 +229,32 @@ describe('Phase 9 - Reliable Background Jobs and Notifications', () => {
     assert.strictEqual(listRes.status, 200);
     const dlJob = listRes.body.data.jobs[0];
     assert.strictEqual(dlJob.encryptedSecret, undefined, 'Admin API MUST NOT expose ciphertext');
+    assert.strictEqual(dlJob.payload, undefined, 'Admin API MUST NOT expose raw payload');
     assert.strictEqual(dlJob.replayable, true);
+    assert.ok(dlJob._id, 'Admin API should expose ID');
+
+    // Admin details dead letters
+    const detailsRes = await request(app)
+      .get(`${config.api.basePath}/admin/jobs/dead-letter/${job._id}`)
+      .set('Authorization', `Bearer ${adminToken}`);
+    assert.strictEqual(detailsRes.status, 200);
+    assert.strictEqual(detailsRes.body.data.job.encryptedSecret, undefined);
+    assert.strictEqual(detailsRes.body.data.job.payload, undefined);
+
+    // Non-Admin access fails
+    const nonAdminRes = await request(app)
+      .get(`${config.api.basePath}/admin/jobs/dead-letter`)
+      .set('Authorization', `Bearer ${citizenToken}`);
+    assert.strictEqual(nonAdminRes.status, 403);
+
+    // Replay completed job fails
+    const completedJob = await DeliveryJob.findOne({ status: JobStatus.SUCCEEDED });
+    if (completedJob) {
+      const invalidReplay = await request(app)
+        .post(`${config.api.basePath}/admin/jobs/${completedJob._id}/replay`)
+        .set('Authorization', `Bearer ${adminToken}`);
+      assert.strictEqual(invalidReplay.status, 404); // Or 404/409 since it's not a dead letter
+    }
 
     // Admin replays
     const replayRes = await request(app)
@@ -224,10 +262,17 @@ describe('Phase 9 - Reliable Background Jobs and Notifications', () => {
       .set('Authorization', `Bearer ${adminToken}`);
 
     assert.strictEqual(replayRes.status, 200);
+    assert.strictEqual(replayRes.body.data.job.payload, undefined);
 
     const replayedJob = await DeliveryJob.findById(job._id);
     assert.strictEqual(replayedJob.status, JobStatus.PENDING);
     assert.strictEqual(replayedJob.attemptCount, 0);
+
+    // Replay already replayed job
+    const replayAgainRes = await request(app)
+      .post(`${config.api.basePath}/admin/jobs/${job._id}/replay`)
+      .set('Authorization', `Bearer ${adminToken}`);
+    assert.strictEqual(replayAgainRes.status, 404, 'Should not replay job no longer in DEAD_LETTER state');
   });
 
   it('8. Scheduler dead-letter cleanup', async () => {

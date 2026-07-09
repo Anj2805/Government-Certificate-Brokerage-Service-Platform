@@ -1,17 +1,28 @@
-import { useState } from 'react';
-
-const INITIAL_SERVICES = [
-  { id: "SRV-01", name: "Income Certificate Issuance", department: "Revenue Department", estimatedTime: "7-10 Days", fee: "₹150.00", status: "Active", desc: "For proving annual income from all sources." },
-  { id: "SRV-02", name: "Domicile Certificate Issuance", department: "Revenue Department", estimatedTime: "10 Days", fee: "₹200.00", status: "Active", desc: "For proving permanent residency in the state." },
-  { id: "SRV-03", name: "Birth Certificate Issuance", department: "Health & Family Welfare", estimatedTime: "5-7 Days", fee: "₹100.00", status: "Active", desc: "Official birth registration cert." },
-  { id: "SRV-04", name: "Caste Certificate Issuance", department: "Social Justice & Empowerment", estimatedTime: "15 Days", fee: "₹120.00", status: "Active", desc: "Verifying community/caste membership." },
-  { id: "SRV-05", name: "PAN Card Linkage Service", department: "Income Tax Department", estimatedTime: "2-3 Days", fee: "₹50.00", status: "Inactive", desc: "Linking Aadhaar card to Permanent Account Number." }
-];
+import { useState, useEffect } from 'react';
+import { serviceApi } from '../../api/serviceApi';
 
 export default function ManageServices() {
-  const [services, setServices] = useState(INITIAL_SERVICES);
+  const [services, setServices] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
+
+  useEffect(() => {
+    fetchServices();
+  }, []);
+
+  const fetchServices = async () => {
+    setIsLoading(true);
+    try {
+      const response = await serviceApi.listServices({ limit: 100 });
+      setServices(response.data?.services || []);
+    } catch (err) {
+      console.error(err);
+      alert('Failed to fetch services');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   // Modal controls
   const [showAddModal, setShowAddModal] = useState(false);
@@ -46,56 +57,79 @@ export default function ManageServices() {
     setShowEditModal(true);
   };
 
-  const handleAddSubmit = (e) => {
+  const handleAddSubmit = async (e) => {
     e.preventDefault();
     if (!formData.name || !formData.estimatedTime || !formData.fee) {
       alert("Please fill all required fields.");
       return;
     }
-    const formattedFee = formData.fee.startsWith("₹") ? formData.fee : `₹${formData.fee}`;
-    const newService = { ...formData, fee: formattedFee };
+    const baseFee = parseFloat(formData.fee.replace('₹', ''));
+    if (isNaN(baseFee)) {
+      alert("Please enter a valid numeric fee.");
+      return;
+    }
 
-    setServices(prev => [...prev, newService]);
-    setShowAddModal(false);
-    alert(`Successfully created new service: "${formData.name}"`);
+    try {
+      await serviceApi.createService({
+        name: formData.name,
+        department: formData.department,
+        estimatedProcessingDays: parseInt(formData.estimatedTime.split('-')[0]) || 5, // Fallback parsing
+        baseFee,
+        description: formData.desc,
+      });
+      setShowAddModal(false);
+      fetchServices();
+      alert(`Successfully created new service: "${formData.name}"`);
+    } catch (err) {
+      alert(err?.response?.data?.message || 'Failed to create service');
+    }
   };
 
-  const handleEditSubmit = (e) => {
+  const handleEditSubmit = async (e) => {
     e.preventDefault();
-    setServices(prev => prev.map(srv => {
-      if (srv.id === formData.id) {
-        const formattedFee = formData.fee.startsWith("₹") ? formData.fee : `₹${formData.fee}`;
-        return { ...formData, fee: formattedFee };
-      }
-      return srv;
-    }));
-    setShowEditModal(false);
-    alert(`Successfully updated service: "${formData.name}"`);
+    const baseFee = parseFloat(formData.fee.toString().replace('₹', ''));
+
+    try {
+      await serviceApi.updateService(formData._id, {
+        name: formData.name,
+        department: formData.department,
+        estimatedProcessingDays: parseInt(formData.estimatedTime.toString().split('-')[0]) || 5,
+        baseFee,
+        description: formData.desc,
+      });
+      setShowEditModal(false);
+      fetchServices();
+      alert(`Successfully updated service: "${formData.name}"`);
+    } catch (err) {
+      alert(err?.response?.data?.message || 'Failed to update service');
+    }
   };
 
-  const handleToggleStatus = (srvId) => {
-    setServices(prev => prev.map(srv => {
-      if (srv.id === srvId) {
-        const newStatus = srv.status === "Active" ? "Inactive" : "Active";
-        alert(`Service status for "${srv.name}" changed to ${newStatus}`);
-        return { ...srv, status: newStatus };
-      }
-      return srv;
-    }));
+  const handleToggleStatus = async (srv) => {
+    try {
+      const newStatus = !srv.isActive;
+      await serviceApi.setActiveStatus(srv._id, newStatus);
+      fetchServices();
+      alert(`Service status for "${srv.name}" changed to ${newStatus ? 'Active' : 'Inactive'}`);
+    } catch (err) {
+      alert(err?.response?.data?.message || 'Failed to toggle status');
+    }
   };
 
   // Filter list
   const filteredServices = services.filter(srv => {
     const matchesSearch = srv.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                           srv.department.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesStatus = statusFilter === "All" || srv.status === statusFilter;
+
+    const srvStatus = srv.isActive ? "Active" : "Inactive";
+    const matchesStatus = statusFilter === "All" || srvStatus === statusFilter;
     return matchesSearch && matchesStatus;
   });
 
   return (
     <div className="flex flex-col min-h-screen text-[#111827]">
       <div className="max-w-[1344px] w-full mx-auto px-6 py-8 flex-1 space-y-8">
-        
+
         {/* Title Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
@@ -180,44 +214,59 @@ export default function ManageServices() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 text-[13px] font-semibold text-gray-600">
-                {filteredServices.length > 0 ? (
+                {isLoading ? (
+                  <tr>
+                    <td colSpan="7" className="px-6 py-12 text-center">
+                      <div className="h-8 w-8 border-4 border-[#13448a] border-t-transparent rounded-full animate-spin mx-auto"></div>
+                      <p className="mt-3 text-[13px] font-bold text-gray-500">Loading services...</p>
+                    </td>
+                  </tr>
+                ) : filteredServices.length > 0 ? (
                   filteredServices.map((srv, idx) => (
                     <tr key={idx} className="hover:bg-gray-50/30 transition-colors">
-                      <td className="px-6 py-4.5 font-bold text-[#13448a]">{srv.id}</td>
+                      <td className="px-6 py-4.5 font-bold text-[#13448a]">{srv._id.substring(0, 8)}...</td>
                       <td className="px-6 py-4.5">
                         <span className="font-extrabold text-gray-800 block">{srv.name}</span>
-                        <span className="text-[11.5px] text-gray-400 font-bold block mt-0.5 max-w-sm truncate">{srv.desc}</span>
+                        <span className="text-[11.5px] text-gray-400 font-bold block mt-0.5 max-w-sm truncate">{srv.description}</span>
                       </td>
                       <td className="px-6 py-4.5 text-gray-700">{srv.department}</td>
-                      <td className="px-6 py-4.5 text-gray-500">{srv.estimatedTime}</td>
-                      <td className="px-6 py-4.5 font-bold text-gray-800">{srv.fee}</td>
+                      <td className="px-6 py-4.5 text-gray-500">{srv.estimatedProcessingDays} Days</td>
+                      <td className="px-6 py-4.5 font-bold text-gray-800">₹{srv.baseFee}</td>
                       <td className="px-6 py-4.5">
                         <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10.5px] font-extrabold border ${
-                          srv.status === "Active"
+                          srv.isActive
                             ? "bg-emerald-50 text-emerald-700 border-emerald-100"
                             : "bg-gray-50 text-gray-500 border-gray-200"
                         }`}>
-                          {srv.status}
+                          {srv.isActive ? "Active" : "Inactive"}
                         </span>
                       </td>
                       <td className="px-6 py-4.5 text-right space-x-2 shrink-0">
                         <button
                           type="button"
-                          onClick={() => handleOpenEdit(srv)}
+                          onClick={() => {
+                            setFormData({
+                              ...srv,
+                              desc: srv.description,
+                              fee: srv.baseFee.toString(),
+                              estimatedTime: srv.estimatedProcessingDays.toString(),
+                            });
+                            setShowEditModal(true);
+                          }}
                           className="h-8 px-3 rounded border border-[#e2e8f0] hover:border-[#13448a] hover:bg-[#13448a]/5 text-[11.5px] font-bold text-gray-700 hover:text-[#13448a] transition-all"
                         >
                           Edit Details
                         </button>
                         <button
                           type="button"
-                          onClick={() => handleToggleStatus(srv.id)}
+                          onClick={() => handleToggleStatus(srv)}
                           className={`h-8 px-3 rounded border text-[11.5px] font-bold transition-all ${
-                            srv.status === "Active"
+                            srv.isActive
                               ? "border-red-150 hover:bg-red-50 text-red-600 hover:border-red-300"
                               : "border-emerald-150 hover:bg-emerald-50 text-emerald-600 hover:border-emerald-300"
                           }`}
                         >
-                          {srv.status === "Active" ? "Deactivate" : "Activate"}
+                          {srv.isActive ? "Deactivate" : "Activate"}
                         </button>
                       </td>
                     </tr>
