@@ -6,14 +6,14 @@ if (process.env.NODE_ENV === 'test') {
 } else {
   require('dotenv').config();
 }
-const app = require('./app');
-const config = require('./src/config');
-const emailService = require('./src/services/email.service');
-const User = require('./src/modules/users/user.model');
-const { signAccessToken } = require('./src/modules/auth/jwt.util');
-const UserRoles = require('./src/common/enums/user-roles.enum');
-const AgentStatus = require('./src/common/enums/agent-status.enum');
-const Permissions = require('./src/common/enums/permissions.enum');
+const app = require('../../app');
+const config = require('../../src/config');
+const emailService = require('../../src/services/email.service');
+const User = require('../../src/modules/users/user.model');
+const { signAccessToken } = require('../../src/modules/auth/jwt.util');
+const UserRoles = require('../../src/common/enums/user-roles.enum');
+const AgentStatus = require('../../src/common/enums/agent-status.enum');
+const Permissions = require('../../src/common/enums/permissions.enum');
 
 // STEP 3 - TEST DATABASE SAFETY GUARD
 if (process.env.NODE_ENV !== 'test') {
@@ -98,7 +98,7 @@ test('Phase 4 - Email Verification Flow', async (t) => {
     assert.strictEqual(data.data.user.emailVerified, false);
     assert.strictEqual(data.data.user.emailVerificationTokenHash, undefined);
     
-    while (await require('./src/workers/delivery.worker').runOnce()) {}
+    while (await require('../../src/workers/delivery.worker').runOnce()) {}
 
     const messages = emailService.getCapturedVerificationMessages();
     assert.strictEqual(messages.length, 1);
@@ -131,7 +131,7 @@ test('Phase 4 - Email Verification Flow', async (t) => {
     assert.strictEqual(data.data.user.emailVerified, false);
     assert.strictEqual(data.data.user.agentStatus, 'pending');
     
-    while (await require('./src/workers/delivery.worker').runOnce()) {}
+    while (await require('../../src/workers/delivery.worker').runOnce()) {}
 
     const messages = emailService.getCapturedVerificationMessages();
     assert.strictEqual(messages.length, 1);
@@ -223,7 +223,7 @@ test('Phase 4 - Email Verification Flow', async (t) => {
     
     assert.strictEqual(res.status, 200);
 
-    while (await require('./src/workers/delivery.worker').runOnce()) {}
+    while (await require('../../src/workers/delivery.worker').runOnce()) {}
 
     const messages = emailService.getCapturedVerificationMessages();
     assert.strictEqual(messages.length, 0); // Should not resend if verified
@@ -246,7 +246,7 @@ test('Phase 4 - Email Verification Flow', async (t) => {
     const userAfter = await User.findById(agentId).select('+emailVerificationTokenHash');
     assert.notStrictEqual(userAfter.emailVerificationTokenHash, oldHash);
     
-    while (await require('./src/workers/delivery.worker').runOnce()) {}
+    while (await require('../../src/workers/delivery.worker').runOnce()) {}
 
     const messages = emailService.getCapturedVerificationMessages();
     assert.strictEqual(messages.length, 1);
@@ -265,7 +265,7 @@ test('Phase 4 - Email Verification Flow', async (t) => {
     
     assert.strictEqual(res.status, 200);
 
-    while (await require('./src/workers/delivery.worker').runOnce()) {}
+    while (await require('../../src/workers/delivery.worker').runOnce()) {}
 
     const messages = emailService.getCapturedVerificationMessages();
     assert.strictEqual(messages.length, 0);

@@ -6,13 +6,13 @@ if (process.env.NODE_ENV === 'test') {
 } else {
   require('dotenv').config();
 }
-const app = require('./app');
-const config = require('./src/config');
-const User = require('./src/modules/users/user.model');
-const Service = require('./src/modules/services/service.model');
-const Request = require('./src/modules/requests/request.model');
-const Notification = require('./src/modules/notifications/notification.model');
-const NotificationType = require('./src/common/enums/notification-type.enum');
+const app = require('../../app');
+const config = require('../../src/config');
+const User = require('../../src/modules/users/user.model');
+const Service = require('../../src/modules/services/service.model');
+const Request = require('../../src/modules/requests/request.model');
+const Notification = require('../../src/modules/notifications/notification.model');
+const NotificationType = require('../../src/common/enums/notification-type.enum');
 
 // STEP 3 - TEST DATABASE SAFETY GUARD
 if (process.env.NODE_ENV !== 'test') {
@@ -244,7 +244,7 @@ test('Phase 5 - Notification System Verification', async (t) => {
     assert.strictEqual(countData.data.unreadCount, 0);
   });
   await t.test('Idempotency: Concurrency test with 10 simultaneous attempts', async () => {
-    const notificationService = require('./src/modules/notifications/notification.service');
+    const notificationService = require('../../src/modules/notifications/notification.service');
     const promises = [];
     const eventId = new mongoose.Types.ObjectId().toString();
     const reqId = new mongoose.Types.ObjectId().toString();
@@ -335,7 +335,7 @@ test('Phase 5 - Notification System Verification', async (t) => {
   });
 
   await t.test('Failure injection tests for all transitions', async () => {
-    const notificationRepository = require('./src/modules/notifications/notification.repository');
+    const notificationRepository = require('../../src/modules/notifications/notification.repository');
     const originalCreate = notificationRepository.createNotification;
     notificationRepository.createNotification = async () => {
       throw new Error('Injected failure');

@@ -3,18 +3,18 @@ const assert = require('node:assert');
 const request = require('supertest');
 const mongoose = require('mongoose');
 const crypto = require('crypto');
-const app = require('./app'); // Should NOT start workers!
-const config = require('./src/config');
-const connectDatabase = require('./src/config/database');
-const { OutboxEvent, EventStatus } = require('./src/modules/jobs/outbox-event.model');
-const { DeliveryJob, JobStatus } = require('./src/modules/jobs/delivery-job.model');
-const User = require('./src/modules/users/user.model');
-const UserRoles = require('./src/common/enums/user-roles.enum');
-const jobService = require('./src/modules/jobs/job.service');
-const emailService = require('./src/services/email.service');
-const deliveryWorker = require('./src/workers/delivery.worker');
-const schedulerWorker = require('./src/workers/scheduler.worker');
-const cryptoUtil = require('./src/utils/crypto.util');
+const app = require('../../app'); // Should NOT start workers!
+const config = require('../../src/config');
+const connectDatabase = require('../../src/config/database');
+const { OutboxEvent, EventStatus } = require('../../src/modules/jobs/outbox-event.model');
+const { DeliveryJob, JobStatus } = require('../../src/modules/jobs/delivery-job.model');
+const User = require('../../src/modules/users/user.model');
+const UserRoles = require('../../src/common/enums/user-roles.enum');
+const jobService = require('../../src/modules/jobs/job.service');
+const emailService = require('../../src/services/email.service');
+const deliveryWorker = require('../../src/workers/delivery.worker');
+const schedulerWorker = require('../../src/workers/scheduler.worker');
+const cryptoUtil = require('../../src/utils/crypto.util');
 
 describe('Phase 9 - Reliable Background Jobs and Notifications', () => {
   let adminToken;
@@ -45,7 +45,7 @@ describe('Phase 9 - Reliable Background Jobs and Notifications', () => {
       isActive: true,
       emailVerified: true,
     });
-    const { signAccessToken } = require('./src/modules/auth/jwt.util');
+    const { signAccessToken } = require('../../src/modules/auth/jwt.util');
     adminToken = signAccessToken(adminUser);
 
     citizenUser = await User.create({

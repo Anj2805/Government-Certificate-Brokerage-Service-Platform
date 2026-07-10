@@ -2,7 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert');
 const { spawn } = require('node:child_process');
 const mongoose = require('mongoose');
-const jwtUtil = require('./src/modules/auth/jwt.util');
+const jwtUtil = require('../../src/modules/auth/jwt.util');
 
 const API = 'http://localhost:5008/api/v1';
 

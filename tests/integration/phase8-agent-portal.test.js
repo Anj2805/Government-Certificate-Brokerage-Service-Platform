@@ -12,17 +12,17 @@ if (process.env.NODE_ENV !== 'test') {
   process.exit(0);
 }
 
-const app = require('./app');
-const User = require('./src/modules/users/user.model');
-const Service = require('./src/modules/services/service.model');
-const Request = require('./src/modules/requests/request.model');
-const Document = require('./src/modules/documents/document.model');
-const Certificate = require('./src/modules/certificates/certificate.model');
-const { signAccessToken } = require('./src/modules/auth/jwt.util');
-const config = require('./src/config');
-const uploadConfig = require('./src/config/upload');
-const DocumentStatus = require('./src/common/enums/document-status.enum');
-const RequestStatus = require('./src/common/enums/request-status.enum');
+const app = require('../../app');
+const User = require('../../src/modules/users/user.model');
+const Service = require('../../src/modules/services/service.model');
+const Request = require('../../src/modules/requests/request.model');
+const Document = require('../../src/modules/documents/document.model');
+const Certificate = require('../../src/modules/certificates/certificate.model');
+const { signAccessToken } = require('../../src/modules/auth/jwt.util');
+const config = require('../../src/config');
+const uploadConfig = require('../../src/config/upload');
+const DocumentStatus = require('../../src/common/enums/document-status.enum');
+const RequestStatus = require('../../src/common/enums/request-status.enum');
 
 const TEST_EMAIL_CITIZEN = 'citizen.doc@test.com';
 const TEST_EMAIL_AGENT = 'agent.doc@test.com';

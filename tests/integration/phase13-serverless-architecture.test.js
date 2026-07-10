@@ -1,11 +1,11 @@
 const test = require('node:test');
 const assert = require('node:assert');
 
-const connectDatabase = require('./src/config/database');
+const connectDatabase = require('../../src/config/database');
 const mongoose = require('mongoose');
-const DocumentStatus = require('./src/common/enums/document-status.enum');
-const UserRoles = require('./src/common/enums/user-roles.enum');
-const RequestStatus = require('./src/common/enums/request-status.enum');
+const DocumentStatus = require('../../src/common/enums/document-status.enum');
+const UserRoles = require('../../src/common/enums/user-roles.enum');
+const RequestStatus = require('../../src/common/enums/request-status.enum');
 
 test('Phase 13 - Vercel Serverless Architecture Verification', async (t) => {
   if (process.env.NODE_ENV !== 'test') {
@@ -21,7 +21,7 @@ test('Phase 13 - Vercel Serverless Architecture Verification', async (t) => {
   });
 
   await t.test('2. Protected Cron Endpoint Authorization', async () => {
-    const cronHandler = require('./api/cron');
+    const cronHandler = require('../../api/cron');
     
     const reqUnauthorized = {
       method: 'GET',
@@ -54,7 +54,7 @@ test('Phase 13 - Vercel Serverless Architecture Verification', async (t) => {
   });
   
   await t.test('3. Bounded worker execution', async () => {
-    const { deliveryWorker, schedulerWorker } = require('./src/workers');
+    const { deliveryWorker, schedulerWorker } = require('../../src/workers');
     
     // Test that runOnce completes synchronously/without hanging
     const deliveryResult = await deliveryWorker.runOnce();
@@ -65,7 +65,7 @@ test('Phase 13 - Vercel Serverless Architecture Verification', async (t) => {
   });
 
   await t.test('4. Storage Adapter local filesystem logic', async () => {
-    const storageService = require('./src/services/storage.service');
+    const storageService = require('../../src/services/storage.service');
     
     // We test whatever provider is currently configured (usually local)
     const strategyLocal = await storageService.getDownloadStrategy('fake-key.pdf', 'file.pdf');
@@ -73,11 +73,11 @@ test('Phase 13 - Vercel Serverless Architecture Verification', async (t) => {
   });
 
   await t.test('5. Legacy local documents are not silently treated as S3 objects', async () => {
-    const User = require('./src/modules/users/user.model');
-    const Service = require('./src/modules/services/service.model');
-    const Request = require('./src/modules/requests/request.model');
-    const Document = require('./src/modules/documents/document.model');
-    const documentService = require('./src/modules/documents/document.service');
+    const User = require('../../src/modules/users/user.model');
+    const Service = require('../../src/modules/services/service.model');
+    const Request = require('../../src/modules/requests/request.model');
+    const Document = require('../../src/modules/documents/document.model');
+    const documentService = require('../../src/modules/documents/document.service');
 
     const suffix = Date.now();
     const citizen = await User.create({
@@ -160,4 +160,6 @@ test('Phase 13 - Vercel Serverless Architecture Verification', async (t) => {
       ]);
     }
   });
+
+  await mongoose.connection.close();
 });

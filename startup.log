@@ -1,2 +1,0 @@
-{"level":30,"time":"2026-07-07T11:55:44.846Z","msg":"MongoDB connection established"}
-{"level":30,"time":"2026-07-07T11:55:44.861Z","port":5003,"env":"development","apiBasePath":"/api/v1","msg":"HTTP server started"}

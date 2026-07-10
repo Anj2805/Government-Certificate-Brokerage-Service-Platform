@@ -107,7 +107,14 @@ test('Phase 6 - Security and Hardening Verification', async (t) => {
   await t.test('Production Error does not leak stack trace', async () => {
     // Start server in production mode on port 5007
     const prodProcess = spawn('node', ['server.js'], {
-      env: { ...process.env, PORT: 5007, NODE_ENV: 'production', REQUEST_BODY_LIMIT: '10kb', MONGODB_URI: process.env.MONGODB_URI },
+      env: { 
+        ...process.env, 
+        PORT: 5007, 
+        NODE_ENV: 'production', 
+        REQUEST_BODY_LIMIT: '10kb', 
+        MONGODB_URI: process.env.MONGODB_URI,
+        DELIVERY_SECRET_ENCRYPTION_KEY: '12345678901234567890123456789012'
+      },
       stdio: 'ignore'
     });
     

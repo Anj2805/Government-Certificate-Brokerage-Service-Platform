@@ -6,10 +6,10 @@ if (process.env.NODE_ENV === 'test') {
 } else {
   require('dotenv').config();
 }
-const app = require('./app');
-const config = require('./src/config');
-const emailService = require('./src/services/email.service');
-const User = require('./src/modules/users/user.model');
+const app = require('../../app');
+const config = require('../../src/config');
+const emailService = require('../../src/services/email.service');
+const User = require('../../src/modules/users/user.model');
 
 if (process.env.NODE_ENV !== 'test') {
   throw new Error('Test environment must be set to NODE_ENV=test');
@@ -141,7 +141,7 @@ test('Phase 3 - Forgot Password and Reset Password Flow', async (t) => {
     assert.match(data.message, /If an account exists/);
     
     // Process the outbox queue
-    while (await require('./src/workers/delivery.worker').runOnce()) {}
+    while (await require('../../src/workers/delivery.worker').runOnce()) {}
 
     const messages = emailService.getCapturedPasswordResetMessages();
     assert.strictEqual(messages.length, 1);
@@ -172,7 +172,7 @@ test('Phase 3 - Forgot Password and Reset Password Flow', async (t) => {
     });
     assert.strictEqual(res.status, 200);
     
-    while (await require('./src/workers/delivery.worker').runOnce()) {}
+    while (await require('../../src/workers/delivery.worker').runOnce()) {}
 
     const messages = emailService.getCapturedPasswordResetMessages();
     assert.strictEqual(messages.length, 1);
