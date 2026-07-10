@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { PATHS } from '../../config/paths';
 import { agentApi } from '../../api/agentApi';
+import { getUploadUrl } from '../../api/httpClient';
 
 export default function AgentRequestDetails() {
   const { id } = useParams();
@@ -329,7 +330,7 @@ export default function AgentRequestDetails() {
 
                     <div className="flex items-center gap-2">
                       <a
-                        href={doc.fileUrl || `http://localhost:5000/uploads/${doc.filename}`}
+                        href={doc.fileUrl || getUploadUrl(doc.filename)}
                         target="_blank"
                         rel="noreferrer"
                         className="h-8 w-8 rounded-lg hover:bg-gray-50 text-[#13448a] flex items-center justify-center font-bold"

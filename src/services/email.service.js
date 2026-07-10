@@ -8,24 +8,24 @@ const capturedGenericMessages = []; // For idempotency checks
 const deliveredIdempotencyKeys = new Set(); // For idempotency checks
 
 const createTransport = () => {
-  if (config.isProduction) {
-    if (!config.email.smtp.host || !config.email.smtp.user || !config.email.smtp.pass) {
+  if (config.env === 'test' || !config.email.isSmtpConfigured) {
+    if (config.isProduction && !config.email.isSmtpConfigured) {
       throw new Error('SMTP configuration is required in production');
     }
 
     return nodemailer.createTransport({
-      host: config.email.smtp.host,
-      port: config.email.smtp.port,
-      secure: config.email.smtp.secure,
-      auth: {
-        user: config.email.smtp.user,
-        pass: config.email.smtp.pass,
-      },
+      jsonTransport: true,
     });
   }
 
   return nodemailer.createTransport({
-    jsonTransport: true,
+    host: config.email.smtp.host,
+    port: config.email.smtp.port,
+    secure: config.email.smtp.secure,
+    auth: {
+      user: config.email.smtp.user,
+      pass: config.email.smtp.pass,
+    },
   });
 };
 

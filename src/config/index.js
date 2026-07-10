@@ -39,13 +39,18 @@ const parseBoolean = (value, fallback = false) => {
   return ['true', '1', 'yes'].includes(String(value).toLowerCase());
 };
 
+const smtpHost = process.env.SMTP_HOST;
+const smtpUser = process.env.SMTP_USER;
+const smtpPass = process.env.SMTP_PASS;
+const isSmtpConfigured = Boolean(smtpHost && smtpUser && smtpPass);
+
 const apiVersion = process.env.API_VERSION || 'v1';
 
 module.exports = {
   env: process.env.NODE_ENV || 'development',
   isProduction: process.env.NODE_ENV === 'production',
   appName: process.env.APP_NAME || 'Government Certificate Brokerage Service',
-  port: parseNumber(process.env.PORT, 5000),
+  port: parseNumber(process.env.PORT, 5001),
   jsonBodyLimit: process.env.JSON_BODY_LIMIT || '10kb',
   urlencodedBodyLimit: process.env.URLENCODED_BODY_LIMIT || '10kb',
   api: {
@@ -74,12 +79,13 @@ module.exports = {
   },
   email: {
     from: process.env.EMAIL_FROM || 'SevaSetu <no-reply@sevasetu.local>',
+    isSmtpConfigured,
     smtp: {
-      host: process.env.SMTP_HOST,
+      host: smtpHost,
       port: parseNumber(process.env.SMTP_PORT, 587),
       secure: parseBoolean(process.env.SMTP_SECURE, false),
-      user: process.env.SMTP_USER,
-      pass: process.env.SMTP_PASS,
+      user: smtpUser,
+      pass: smtpPass,
     },
   },
   jwt: {

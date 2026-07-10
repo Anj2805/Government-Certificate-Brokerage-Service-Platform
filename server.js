@@ -3,12 +3,24 @@ const app = require('./app');
 const config = require('./src/config');
 const connectDatabase = require('./src/config/database');
 const logger = require('./src/config/logger');
+const workers = require('./src/workers');
 
 let server;
 
 const startServer = async () => {
   try {
     await connectDatabase();
+
+    if (config.env === 'development') {
+      workers.startAll();
+      logger.info('Background workers started in development mode');
+
+      if (config.email.isSmtpConfigured && /@resend\.dev>/i.test(config.email.from)) {
+        logger.warn(
+          'EMAIL_FROM uses resend.dev — Resend only delivers test emails to the address on your Resend account. Verify a domain and update EMAIL_FROM to send to any recipient.',
+        );
+      }
+    }
 
     server = http.createServer(app);
     server.listen(config.port, () => {
@@ -17,6 +29,7 @@ const startServer = async () => {
           port: config.port,
           env: config.env,
           apiBasePath: config.api.basePath,
+          emailDelivery: config.email.isSmtpConfigured ? 'smtp' : 'json-transport',
         },
         'HTTP server started',
       );
@@ -29,6 +42,8 @@ const startServer = async () => {
 
 const shutdown = async (signal) => {
   logger.info({ signal }, 'Shutdown signal received');
+
+  workers.stopAll();
 
   if (!server) {
     process.exit(0);

@@ -3,6 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { PATHS } from '../../config/paths';
 import { requestApi } from '../../api/requestApi';
 import { documentApi } from '../../api/documentApi';
+import { getUploadUrl } from '../../api/httpClient';
 
 export default function RequestDetails() {
   const { id } = useParams();
@@ -436,7 +437,7 @@ export default function RequestDetails() {
                         {doc.status}
                       </span>
                       <a
-                        href={`http://localhost:5000/uploads/${doc.filename}`}
+                        href={getUploadUrl(doc.filename)}
                         target="_blank"
                         rel="noreferrer"
                         className="h-8 w-8 rounded-lg hover:bg-gray-50 text-gray-450 hover:text-gray-700 flex items-center justify-center"

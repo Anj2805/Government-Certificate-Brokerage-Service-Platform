@@ -105,7 +105,7 @@ Key architectural decisions:
 Swagger UI is available at:
 
 ```text
-http://localhost:5000/api-docs
+http://localhost:5001/api-docs
 ```
 
 The OpenAPI documentation covers:
@@ -160,14 +160,14 @@ npm run dev
 The API will run at:
 
 ```text
-http://localhost:5000/api/v1
+http://localhost:5001/api/v1
 ```
 
 ## Environment Variables
 
 ```env
 NODE_ENV=development
-PORT=5000
+PORT=5001
 
 APP_NAME="Government Certificate Brokerage Service"
 API_VERSION=v1

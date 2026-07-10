@@ -83,7 +83,12 @@ const processJob = async (job) => {
 
     // Determine category: Transient or Permanent
     // Simulated delivery failure or timeouts can be transient. "Secret has expired" or "Unsupported" are permanent.
-    const isPermanent = ['Secret has expired', 'Unsupported jobType'].some(e => error.message.includes(e));
+    const isPermanent = [
+      'Secret has expired',
+      'Unsupported jobType',
+      'You can only send testing emails',
+      'SMTP configuration is required in production',
+    ].some((message) => error.message.includes(message));
 
     if (isPermanent || job.attemptCount >= job.maxAttempts) {
       job.status = JobStatus.DEAD_LETTER;
