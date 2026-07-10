@@ -116,6 +116,7 @@ const uploadDocument = async ({ file, payload, user, reqId }) => {
       documentType: payload.documentType,
       originalName: file.originalname,
       filename: storageKey,
+      storageProvider: process.env.STORAGE_PROVIDER || 'local',
       mimeType: file.mimetype,
       size: file.size,
       path: storageKey, // We store storageKey here
@@ -278,6 +279,10 @@ const downloadDocument = async (documentId, user) => {
     const logger = require('../../config/logger');
     logger.warn({ audit: true, eventType: 'DOCUMENT_DOWNLOAD_DENIED', actorId: user.id, documentId }, 'Document download denied');
     throw new ApiError(httpStatus.NOT_FOUND, 'Document not found');
+  }
+
+  if (document.storageProvider === 'local' && process.env.STORAGE_PROVIDER === 's3') {
+    throw new ApiError(httpStatus.BAD_REQUEST, 'Document storage provider is local but environment is configured for S3. Migration required.');
   }
 
   const strategy = await storageService.getDownloadStrategy(document.path, document.originalName);

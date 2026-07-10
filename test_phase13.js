@@ -3,6 +3,9 @@ const assert = require('node:assert');
 
 const connectDatabase = require('./src/config/database');
 const mongoose = require('mongoose');
+const DocumentStatus = require('./src/common/enums/document-status.enum');
+const UserRoles = require('./src/common/enums/user-roles.enum');
+const RequestStatus = require('./src/common/enums/request-status.enum');
 
 test('Phase 13 - Vercel Serverless Architecture Verification', async (t) => {
   if (process.env.NODE_ENV !== 'test') {
@@ -67,5 +70,94 @@ test('Phase 13 - Vercel Serverless Architecture Verification', async (t) => {
     // We test whatever provider is currently configured (usually local)
     const strategyLocal = await storageService.getDownloadStrategy('fake-key.pdf', 'file.pdf');
     assert.strictEqual(strategyLocal.type, process.env.STORAGE_PROVIDER === 's3' ? 'redirect' : 'local');
+  });
+
+  await t.test('5. Legacy local documents are not silently treated as S3 objects', async () => {
+    const User = require('./src/modules/users/user.model');
+    const Service = require('./src/modules/services/service.model');
+    const Request = require('./src/modules/requests/request.model');
+    const Document = require('./src/modules/documents/document.model');
+    const documentService = require('./src/modules/documents/document.service');
+
+    const suffix = Date.now();
+    const citizen = await User.create({
+      firstName: 'Phase',
+      lastName: 'Citizen',
+      email: `phase13-citizen-${suffix}@example.com`,
+      phone: '0000000000',
+      password: 'Password123!',
+      role: UserRoles.CITIZEN,
+    });
+
+    const agent = await User.create({
+      firstName: 'Phase',
+      lastName: 'Agent',
+      email: `phase13-agent-${suffix}@example.com`,
+      phone: '1111111111',
+      password: 'Password123!',
+      role: UserRoles.AGENT,
+    });
+
+    const service = await Service.create({
+      name: `Phase 13 Service ${suffix}`,
+      description: 'Temporary service for compatibility verification',
+      category: 'verification',
+      requiredDocuments: ['identity-proof'],
+      estimatedProcessingDays: 3,
+      serviceCharge: 0,
+      createdBy: citizen._id,
+    });
+
+    const request = await Request.create({
+      requestNumber: `P13-${suffix}`,
+      citizen: citizen._id,
+      service: service._id,
+      serviceSnapshot: {
+        serviceName: service.name,
+        category: service.category,
+        estimatedProcessingDays: service.estimatedProcessingDays,
+        serviceCharge: service.serviceCharge,
+        requiredDocuments: service.requiredDocuments,
+      },
+      assignedAgent: agent._id,
+      status: RequestStatus.DRAFT,
+      applicationData: {},
+    });
+
+    const document = await Document.create({
+      title: 'Legacy local document',
+      documentType: 'identity-proof',
+      originalName: 'legacy.pdf',
+      filename: `legacy-${suffix}.pdf`,
+      mimeType: 'application/pdf',
+      size: 12,
+      hash: 'd41d8cd98f00b204e9800998ecf8427e',
+      path: `legacy-${suffix}.pdf`,
+      uploadedBy: citizen._id,
+      ownerUser: citizen._id,
+      request: request._id,
+      status: DocumentStatus.PENDING,
+      storageProvider: 'local',
+    });
+
+    try {
+      process.env.STORAGE_PROVIDER = 's3';
+      await assert.rejects(
+        () => documentService.downloadDocument(document._id, { id: citizen._id.toString(), role: UserRoles.CITIZEN }),
+        (error) => {
+          assert.ok(error);
+          assert.ok(error.statusCode === 400 || error.status === 400 || /storage provider|migration/i.test(error.message || ''));
+          return true;
+        }
+      );
+    } finally {
+      process.env.STORAGE_PROVIDER = 'local';
+      await Promise.allSettled([
+        User.deleteMany({ _id: { $in: [citizen._id, agent._id] } }),
+        Service.deleteOne({ _id: service._id }),
+        Request.deleteOne({ _id: request._id }),
+        Document.deleteOne({ _id: document._id }),
+      ]);
+    }
   });
 });

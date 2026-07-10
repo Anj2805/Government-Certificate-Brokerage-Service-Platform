@@ -30,6 +30,10 @@ const documentSchema = new mongoose.Schema(
       required: true,
       unique: true,
     },
+    storageProvider: {
+      type: String,
+      default: 'local',
+    },
     mimeType: {
       type: String,
       required: true,
