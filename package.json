@@ -5,10 +5,12 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "nodemon server.js",
+    "dev": "lsof -t -i:5001 | xargs kill -9 2>/dev/null || true; nodemon server.js",
     "lint": "eslint .",
     "test": "node --test tests/integration/",
     "test:all": "for file in tests/integration/*.test.js; do node --test \"$file\" || exit 1; done",
+    "seed:showcase": "node scripts/seed/index.js --showcase",
+    "seed:showcase:reset": "node scripts/seed/index.js --showcase --reset",
     "seed:admin": "node scripts/seedAdmin.js",
     "seed:services": "node scripts/seedServices.js",
     "worker": "node worker.js"
@@ -47,6 +49,8 @@
     "nodemailer": "^9.0.3",
     "pdfkit": "^0.19.1",
     "pino": "^9.3.2",
+    "qrcode": "^1.5.4",
+    "speakeasy": "^2.0.0",
     "swagger-jsdoc": "^6.2.8",
     "swagger-ui-express": "^5.0.1"
   },
