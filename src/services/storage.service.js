@@ -27,17 +27,26 @@ if (provider === 's3') {
 const initializeStorage = async () => {
   if (provider === 'local') {
     try {
-    await fs.mkdir(storageRoot, { recursive: true });
-    logger.info(`Storage root initialized at ${storageRoot}`);
-  } catch (error) {
+      await fs.mkdir(storageRoot, { recursive: true });
+      logger.info(`Storage root initialized at ${storageRoot}`);
+    } catch (error) {
       logger.fatal({ err: error }, 'Failed to initialize storage root');
       throw error;
     }
   }
 };
 
-// Initialize immediately (non-blocking for module load, but will complete quickly)
-initializeStorage().catch(() => process.exit(1));
+let storageInitialization = null;
+
+const ensureStorageInitialized = async () => {
+  if (provider !== 'local') return;
+
+  if (!storageInitialization) {
+    storageInitialization = initializeStorage();
+  }
+
+  await storageInitialization;
+};
 
 /**
  * Validates that a resolved path is strictly within the storage root
@@ -81,6 +90,7 @@ const save = async (tempFilePath, extension = '') => {
   const storageKey = generateStorageKey(extension);
 
   if (provider === 'local') {
+    await ensureStorageInitialized();
     const finalPath = getSafePath(storageKey);
     try {
       await fs.rename(tempFilePath, finalPath);
@@ -118,6 +128,7 @@ const save = async (tempFilePath, extension = '') => {
  */
 const exists = async (storageKey) => {
   if (provider === 'local') {
+    await ensureStorageInitialized();
     try {
       const filePath = getSafePath(storageKey);
       await fs.access(filePath);
@@ -148,6 +159,7 @@ const exists = async (storageKey) => {
  */
 const remove = async (storageKey) => {
   if (provider === 'local') {
+    await ensureStorageInitialized();
     try {
       const filePath = getSafePath(storageKey);
       await fs.unlink(filePath);
@@ -181,6 +193,7 @@ const remove = async (storageKey) => {
  */
 const getDownloadStrategy = async (storageKey, originalName) => {
   if (provider === 'local') {
+    await ensureStorageInitialized();
     return {
       type: 'local',
       physicalPath: getSafePath(storageKey)
@@ -209,6 +222,7 @@ const getDownloadStrategy = async (storageKey, originalName) => {
 
 const getViewStrategy = async (storageKey) => {
   if (provider === 'local') {
+    await ensureStorageInitialized();
     return {
       type: 'local',
       physicalPath: getSafePath(storageKey)
