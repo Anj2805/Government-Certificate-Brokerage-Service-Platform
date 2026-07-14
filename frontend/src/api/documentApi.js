@@ -22,4 +22,5 @@ export const documentApi = {
     const { data } = await httpClient.delete(`/documents/${id}`);
     return data;
   },
+  downloadDocument: (documentId) => httpClient.get(`/documents/${documentId}/download?json=true`)
 };

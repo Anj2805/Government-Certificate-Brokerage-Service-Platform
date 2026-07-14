@@ -74,8 +74,8 @@ const rejectDocument = [
   ...mongoIdParam,
   body('rejectionReason')
     .trim()
-    .isLength({ min: 5, max: 500 })
-    .withMessage('rejectionReason must be between 5 and 500 characters'),
+    .isLength({ min: 3, max: 500 })
+    .withMessage('rejectionReason must be between 3 and 500 characters'),
 ];
 
 module.exports = {

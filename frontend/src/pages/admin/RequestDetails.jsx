@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { PATHS } from '../../config/paths';
 import { adminApi } from '../../api/adminApi';
+import { requestApi } from '../../api/requestApi';
+import toast from 'react-hot-toast';
 
 export default function AdminRequestDetails() {
   const { id } = useParams();
@@ -22,11 +24,11 @@ export default function AdminRequestDetails() {
         adminApi.getRequestDetails(id),
         adminApi.listAgents({ limit: 100 })
       ]);
-      setRequestInfo(reqData.request || reqData);
+      setRequestInfo(reqData.data?.request || reqData.request || reqData);
       setAgents(agentsData.data?.agents || []);
     } catch (err) {
       console.error(err);
-      alert('Failed to load request details');
+      toast.error('Failed to load request details');
       navigate(PATHS.ADMIN_REQUESTS);
     } finally {
       setIsLoading(false);
@@ -35,7 +37,10 @@ export default function AdminRequestDetails() {
 
   // Modal controls
   const [showAssignModal, setShowAssignModal] = useState(false);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [selectedAgentId, setSelectedAgentId] = useState("");
+  const [paymentReference, setPaymentReference] = useState("");
+  const [adminNote, setAdminNote] = useState("");
 
   const handleAssignAgent = async (e) => {
     e.preventDefault();
@@ -46,11 +51,32 @@ export default function AdminRequestDetails() {
       } else {
         await adminApi.assignAgent(requestInfo._id, selectedAgentId);
       }
-      alert(`Successfully assigned request to agent.`);
+      toast.success(`Successfully assigned request to agent.`);
       setShowAssignModal(false);
       fetchData();
     } catch (err) {
-      alert(err?.response?.data?.message || 'Failed to assign agent');
+      toast.error(err?.response?.data?.message || 'Failed to assign agent');
+    }
+  };
+
+  const handleRecordPayment = async (e) => {
+    e.preventDefault();
+    if (!paymentReference.trim()) {
+      toast.error('Please enter a payment reference number.');
+      return;
+    }
+    try {
+      await requestApi.recordPayment(id, {
+        paymentReference,
+        notes: adminNote
+      });
+      toast.success('Offline payment recorded successfully.');
+      setShowPaymentModal(false);
+      setPaymentReference("");
+      setAdminNote("");
+      fetchData();
+    } catch (err) {
+      toast.error(err?.response?.data?.message || 'Failed to record payment');
     }
   };
 
@@ -84,6 +110,14 @@ export default function AdminRequestDetails() {
           </div>
 
           <div className="flex flex-wrap gap-2 shrink-0">
+            {requestInfo.paymentStatus === 'DUE' && (
+              <button
+                onClick={() => setShowPaymentModal(true)}
+                className="h-10 px-4 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-[13px] font-bold text-white transition-colors shadow-sm"
+              >
+                Record Payment
+              </button>
+            )}
             {requestInfo.status !== 'completed' && requestInfo.status !== 'rejected' && requestInfo.status !== 'draft' && (
               <button
                 onClick={() => {
@@ -157,8 +191,18 @@ export default function AdminRequestDetails() {
                   </div>
                   <div>
                     <span className="text-[10px] text-gray-400 block uppercase font-bold">Contact Details</span>
-                    <div className="mt-0.5 text-[13px] text-gray-700 font-bold">
+                    <div className="mt-0.5 text-[13px] text-gray-700 font-bold space-y-0.5">
                       <p>{requestInfo.citizen?.email}</p>
+                      {requestInfo.citizen?.phone && <p>{requestInfo.citizen.phone}</p>}
+                    </div>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-gray-400 block uppercase font-bold">Address</span>
+                    <div className="mt-0.5 text-[13px] text-gray-700 font-bold space-y-0.5 whitespace-pre-wrap">
+                      <p>{requestInfo.citizen?.address || 'No address provided.'}</p>
+                      {(requestInfo.citizen?.city || requestInfo.citizen?.state || requestInfo.citizen?.postalCode) && (
+                        <p>{[requestInfo.citizen?.city, requestInfo.citizen?.state, requestInfo.citizen?.postalCode].filter(Boolean).join(', ')}</p>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -174,18 +218,44 @@ export default function AdminRequestDetails() {
               ) : (
                 <div className="space-y-3">
                   {requestInfo.documents.map((doc, idx) => (
-                    <div key={idx} className="flex items-center justify-between p-3.5 rounded-lg border border-gray-100 hover:bg-gray-50 transition-colors group">
-                      <div className="flex items-center gap-3">
-                        <div className="h-10 w-10 rounded-lg bg-red-50 text-red-500 flex items-center justify-center shrink-0">
+                    <div key={idx} className="flex items-center justify-between p-3.5 rounded-xl border border-slate-200 hover:border-blue-600 shadow-sm transition-colors group">
+                      <div className="flex items-center gap-3 min-w-0 flex-1">
+                        <div className="h-10 w-10 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
                           <svg style={{ width: '20px', height: '20px' }} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 17.25v3.375c0 .621-.504 1.125-1.125 1.125h-9.75a1.125 1.125 0 01-1.125-1.125V7.875c0-.621.504-1.125 1.125-1.125H6.75a9.06 9.06 0 011.5.124m7.5 10.376h3.375c.621 0 1.125-.504 1.125-1.125V11.25c0-4.46-3.243-8.161-7.5-8.876a9.06 9.06 0 00-1.5-.124H9.375c-.621 0-1.125.504-1.125 1.125v3.5m7.5 10.375H9.375a1.125 1.125 0 01-1.125-1.125v-9.25m12 6.625v-1.875a3.375 3.375 0 00-3.375-3.375h-1.5a1.125 1.125 0 01-1.125-1.125v-1.5a3.375 3.375 0 00-3.375-3.375H9.75" />
                           </svg>
                         </div>
-                        <div>
-                          <p className="text-[13px] font-extrabold text-gray-800">{doc.originalName}</p>
-                          <p className="text-[11.5px] font-bold text-gray-500 mt-0.5">{doc.documentType}</p>
+                        <div className="space-y-0.5 min-w-0 flex-1">
+                          <p className="text-sm font-bold text-gray-900 truncate" title={doc.originalName}>{doc.originalName}</p>
+                          <p className="text-xs font-semibold text-gray-500 truncate">{doc.documentType}</p>
                         </div>
                       </div>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          try {
+                            const res = await adminApi.downloadDocument(doc._id);
+                            window.open(res.data.data.url, '_blank');
+                          } catch (err) {
+                            if (err.response?.status === 404) {
+                              toast.error("Document file not found. Automatically requesting re-upload from citizen.");
+                              try {
+                                await adminApi.rejectDocument(doc._id, 'Document file not found on server. Please re-upload.');
+                                await adminApi.requestCorrection(requestInfo._id, `Document ${doc.originalName} is missing and needs to be re-uploaded.`);
+                                fetchRequestDetails();
+                              } catch (e) {
+                                toast.error(e?.response?.data?.message || 'An error occurred');
+        console.error(e);
+                              }
+                            } else {
+                              toast.error("Failed to load document");
+                            }
+                          }
+                        }}
+                        className="opacity-0 group-hover:opacity-100 h-8 px-3 ml-2 rounded bg-blue-50 text-blue-700 hover:bg-blue-100 text-xs font-bold transition-all flex items-center justify-center shrink-0"
+                      >
+                        Download
+                      </button>
                     </div>
                   ))}
                 </div>
@@ -258,12 +328,15 @@ export default function AdminRequestDetails() {
               <button onClick={() => setShowAssignModal(false)} className="text-gray-450 hover:text-gray-700 font-extrabold">✕</button>
             </div>
 
-            <form onSubmit={handleAssignAgent} className="space-y-4 text-[13.5px] font-semibold">
+            <form onSubmit={handleAssignAgent} className="space-y-4">
               <div>
                 <label className="block text-[12px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">Request ID</label>
-                <div className="h-10 px-3 bg-gray-50 border border-gray-100 rounded-lg flex items-center text-[13px] text-gray-700 font-bold">
-                  {requestInfo._id}
-                </div>
+                <input
+                  type="text"
+                  value={requestInfo._id}
+                  disabled
+                  className="w-full h-11 px-3.5 rounded-lg border border-gray-100 bg-gray-50 text-[13.5px] font-bold text-gray-600 outline-none"
+                />
               </div>
 
               <div>
@@ -280,6 +353,50 @@ export default function AdminRequestDetails() {
                 </select>
               </div>
 
+              {selectedAgentId && (
+                <div className="p-4 bg-gray-50 rounded-xl border border-gray-100 space-y-3">
+                  {(() => {
+                    const agent = agents.find(a => a._id === selectedAgentId);
+                    if (!agent) return null;
+                    return (
+                      <>
+                        <div className="flex items-center gap-3 pb-3 border-b border-gray-200">
+                          <div className="h-10 w-10 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center font-bold text-sm uppercase">
+                            {agent.firstName?.[0]}{agent.lastName?.[0]}
+                          </div>
+                          <div>
+                            <p className="text-[14px] font-bold text-gray-900">{agent.firstName} {agent.lastName}</p>
+                            <p className="text-[12px] font-semibold text-gray-500">{agent.email}</p>
+                          </div>
+                        </div>
+                        <div className="flex gap-4 mb-2">
+                          <div className="flex-1">
+                            <span className="block text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-1">Department</span>
+                            <span className="text-[13px] font-bold text-gray-800 bg-gray-100 px-2 py-1 rounded-md">{agent.department || 'Central Services'}</span>
+                          </div>
+                          <div className="flex-1">
+                            <span className="block text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-1">Designation</span>
+                            <span className="text-[13px] font-semibold text-gray-700">{agent.designation || 'Agent'}</span>
+                          </div>
+                        </div>
+                        <div>
+                          <span className="block text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-1">Background / Notes</span>
+                          <p className="text-[13px] font-medium text-gray-700 leading-relaxed whitespace-pre-wrap bg-white p-3 rounded-lg border border-gray-100">
+                            {agent.agentBackground || 'No background information available.'}
+                          </p>
+                        </div>
+                        <div className="flex justify-between items-center pt-2">
+                          <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Status</span>
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase bg-emerald-100 text-emerald-700">
+                            {agent.agentStatus}
+                          </span>
+                        </div>
+                      </>
+                    );
+                  })()}
+                </div>
+              )}
+
               <div className="pt-2 flex gap-3">
                 <button
                   type="button"
@@ -293,6 +410,55 @@ export default function AdminRequestDetails() {
                   className="flex-1 h-11 bg-[#13448a] hover:bg-[#0c316a] text-[13px] font-bold text-white rounded-lg shadow-sm transition-colors"
                 >
                   Confirm Agent
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: RECORD PAYMENT */}
+      {showPaymentModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-sm w-full p-6 space-y-6 shadow-xl border border-gray-100">
+            <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+              <h3 className="text-[17px] font-extrabold text-[#0f294a]">Record Offline Payment</h3>
+              <button onClick={() => setShowPaymentModal(false)} className="text-gray-450 hover:text-red-500 font-extrabold">✕</button>
+            </div>
+            <form onSubmit={handleRecordPayment} className="space-y-4">
+              <div>
+                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Amount Due</label>
+                <div className="text-[15px] font-extrabold text-gray-800">
+                  ₹ {requestInfo.service?.serviceCharge || 0}
+                </div>
+              </div>
+              <div>
+                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Receipt / Reference Number</label>
+                <input
+                  type="text"
+                  value={paymentReference}
+                  onChange={(e) => setPaymentReference(e.target.value)}
+                  className="w-full h-11 px-3 rounded-lg border border-[#e2e8f0] focus:ring-2 focus:ring-[#13448a] focus:border-[#13448a] text-[13.5px] font-semibold transition-all outline-none"
+                  placeholder="e.g. REC-10293"
+                  required
+                />
+              </div>
+              <div>
+                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Internal Note (Optional)</label>
+                <textarea
+                  value={adminNote}
+                  onChange={(e) => setAdminNote(e.target.value)}
+                  className="w-full p-3 rounded-lg border border-[#e2e8f0] focus:ring-2 focus:ring-[#13448a] focus:border-[#13448a] text-[13.5px] font-semibold transition-all outline-none resize-none"
+                  rows="2"
+                  placeholder="E.g. Paid in cash at main office..."
+                />
+              </div>
+              <div className="pt-2">
+                <button
+                  type="submit"
+                  className="w-full h-11 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-[13px] font-bold text-white transition-colors shadow-sm"
+                >
+                  Record Payment
                 </button>
               </div>
             </form>

@@ -6,7 +6,11 @@ export const requestApi = {
     return data.data.request;
   },
   async submitRequest(id, payload = {}) {
-    const { data } = await httpClient.patch(`/requests/${id}/submit`, payload);
+    const { data } = await httpClient.post(`/requests/${id}/submit`, payload);
+    return data.data.request;
+  },
+  async recordPayment(id, payload) {
+    const { data } = await httpClient.post(`/requests/${id}/record-payment`, payload);
     return data.data.request;
   },
   async listOwnRequests(params = {}) {

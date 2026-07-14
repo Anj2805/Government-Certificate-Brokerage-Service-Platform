@@ -9,7 +9,6 @@ const validateRequest = require('../../middlewares/validate-request.middleware')
 const router = express.Router();
 
 router.use(authenticate);
-router.use(authorizeRoles(UserRoles.CITIZEN));
 
 router.get(
   '/unread-count',

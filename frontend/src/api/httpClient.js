@@ -7,6 +7,9 @@ const apiOrigin = apiBaseUrl.replace(/\/api\/v\d+\/?$/, '');
 
 export const getUploadUrl = (filename) => `${apiOrigin}/uploads/${filename}`;
 
+export const getProfilePhotoUrl = (token) => `${apiBaseUrl}/agents/profile/photo?token=${token}`;
+export const getCitizenProfilePhotoUrl = (token) => `${apiBaseUrl}/users/me/profile/photo?token=${token}`;
+
 const httpClient = axios.create({
   baseURL: apiBaseUrl,
   timeout: 15000,

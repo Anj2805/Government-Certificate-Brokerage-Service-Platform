@@ -1,345 +1,144 @@
-# Government Certificate & Brokerage Service Platform
+# SevaSetu
 
-A production-oriented Node.js backend for managing government certificate services, citizen requests, document uploads, agent workflows, and admin operations.
+A comprehensive Government Certificate & Brokerage Service Platform designed to streamline citizen access to public services through verified agents, secure document workflows, and transparent application tracking.
 
-The platform is built around a modular Express architecture with MongoDB persistence, JWT authentication, RBAC, workflow-controlled request status transitions, local document storage, and Swagger/OpenAPI documentation.
+## Overview
 
-## Project Overview
+Navigating government processes often involves complex procedures and long waiting times. SevaSetu digitizes this journey by connecting citizens with verified service agents who provide procedural assistance, document verification, and secure final delivery (including COD options for paid services).
 
-This backend supports a service marketplace where administrators manage government service catalog entries, citizens create service requests, agents process assigned requests, and admins monitor and control platform operations.
+The platform operates across three primary roles:
+- **Citizen:** Users seeking certificates (Birth, Income, PAN, Domicile, etc.).
+- **Agent:** Verified representatives managing applications, conducting field verifications, and updating statuses.
+- **Admin:** Platform administrators overseeing agents, monitoring requests, and managing service catalog and analytics.
 
-Core workflows include:
+## Key Features
 
-- User authentication and role-based access
-- Dynamic service catalog management
-- Citizen service request lifecycle management
-- Document upload, verification, rejection, and soft deletion
-- Agent dashboard operations
-- Admin dashboard metrics and management APIs
+### Citizen Portal
+- **Secure Authentication:** Registration, login, and secure password management.
+- **Service Discovery:** Search and browse available government services with dynamic requirements.
+- **Application Workflow:** Submit applications, upload required proofs, and track real-time status.
+- **Dynamic Tracking:** Visual timeline covering Draft → Submitted → Assigned → Under Review → Approved → Completed.
+- **Correction Handling:** Review agent feedback and re-upload documents if corrections are requested.
+- **Secure Delivery & COD:** Track physical delivery of certificates, including offline Cash-on-Delivery payment handling.
 
-## Features
+### Agent Portal
+- **Dashboard & Workload:** Overview of assigned tasks, grouped by "New", "In Progress", and "Action Required".
+- **Application Management:** Review citizen applications and submitted proofs.
+- **Document Workflows:** Approve/reject citizen documents, request corrections, and upload official reports (Verification Reports, Agent Notes).
+- **Final Certification:** Upload final government certificates securely on behalf of the citizen.
+- **Status Updates:** Advance applications through their lifecycle to trigger real-time updates for citizens.
 
-- JWT access and refresh token authentication
-- Roles: `citizen`, `agent`, `admin`
-- Centralized RBAC permissions
-- Service catalog stored in MongoDB
-- Request workflow engine with controlled status transitions
-- Status history tracking for audit and review
-- Sequential request numbers such as `REQ-2026-000001`
-- Service snapshot stored on each request
-- Local document uploads to `/uploads`
-- File validation for PDF, JPG, JPEG, and PNG
-- 5MB upload limit
-- Agent dashboard APIs
-- Admin dashboard APIs
-- Centralized error handling
-- Structured logging
-- Security middleware: Helmet, CORS, rate limiting, HPP, Mongo sanitization, compression
-- Swagger UI at `/api-docs`
+### Admin Portal
+- **Global Dashboard:** High-level metrics, active requests, and revenue tracking.
+- **Agent & User Management:** Approve, suspend, or audit agents and citizens.
+- **Service Management:** Dynamically configure services, required documents, processing times, and fees.
+- **Request Oversight:** Reassign requests, monitor stalled applications, and view granular audit histories.
+- **Analytics:** Data-driven insights into platform usage and completion rates.
 
-## Tech Stack
+### Security
+- **Authentication & Authorization:** Secure JWT-based sessions and strict Role-Based Access Control (RBAC).
+- **Data Protection:** Hashed passwords (bcrypt) and sanitized database queries.
+- **Storage Security:** Cloudflare R2 (S3-compatible) integration ensuring private object storage. Files are never publicly exposed.
+- **Audit Trails:** Immutable status history logs on every request.
 
-- Node.js
-- Express.js
-- MongoDB
-- Mongoose
-- JWT
-- bcrypt
-- Multer
-- express-validator
-- Pino and Morgan
-- Swagger JSDoc
-- Swagger UI Express
+### Notifications and Background Jobs
+- **Real-Time Feedback:** Global toast notifications for immediate actions.
+- **Status Alerts:** Persistent notification center for citizens (e.g., application updates, missing document alerts).
+- **Background Workers:** Scheduled Cron jobs and reliable queue processors for asynchronous email delivery and system health checks.
 
-## Architecture
+### Secure Delivery and COD Workflow
+- **Free Services:** Application → Verification → Dispatch → Secure Handover.
+- **Paid Services:** Application → Verification → Dispatch → COD Collection → Secure Handover.
 
-The project follows a modular MVC architecture. Each business area owns its routes, validation, controller, service, repository, and model where applicable.
+## Architecture & Tech Stack
 
-Key architectural decisions:
+**Layer** | **Technology**
+--- | ---
+Frontend | React.js (Vite), Tailwind CSS
+Backend | Node.js, Express.js
+Database | MongoDB Atlas, Mongoose
+Authentication | JWT, bcrypt
+Storage | Cloudflare R2 (S3 API)
+Deployment | Vercel (Serverless Backend + Static Frontend)
 
-- `src/modules/*` contains feature modules.
-- `src/common/*` contains shared enums, errors, response helpers, models, and utilities.
-- `src/config/*` contains runtime configuration, database setup, logging, upload config, permissions, and Swagger setup.
-- `src/middlewares/*` contains reusable Express middleware.
-- API versioning is mounted at `/api/v1`.
-- Swagger UI is mounted at `/api-docs`.
+## Showcase Dataset
 
-## Folder Structure
+The repository includes a robust, deterministic seeding engine designed for demonstrating the platform's full capabilities without manual data entry.
 
-```text
-.
-├── app.js
-├── server.js
-├── package.json
-├── .env.example
-├── scripts
-│   ├── seedAdmin.js
-│   └── seedServices.js
-├── uploads
-├── src
-│   ├── api
-│   │   └── v1
-│   │       └── routes
-│   ├── common
-│   │   ├── enums
-│   │   ├── errors
-│   │   ├── models
-│   │   ├── responses
-│   │   └── utils
-│   ├── config
-│   ├── docs
-│   ├── middlewares
-│   ├── modules
-│   │   ├── admin
-│   │   ├── agents
-│   │   ├── auth
-│   │   ├── documents
-│   │   ├── requests
-│   │   ├── services
-│   │   └── users
-│   └── utils
-```
+**Personas Included:**
+- Active Citizens, New Users, Users requiring Corrections.
+- High-Performance Agents, Verification Specialists.
+- Administrator accounts.
 
-## API Documentation
-
-Swagger UI is available at:
-
-```text
-http://localhost:5001/api-docs
-```
-
-The OpenAPI documentation covers:
-
-- Authentication APIs
-- Service Catalog APIs
-- Document APIs
-- Request APIs
-- Agent Dashboard APIs
-- Admin Dashboard APIs
-- JWT bearer authentication examples
-- Request and response schemas
-
-## Installation
-
-1. Clone the repository.
-
+### Using the Showcase Demo
+To populate the database with realistic demo data, run:
 ```bash
-git clone <repository-url>
-cd <project-folder>
+npm run seed:showcase
 ```
+This generates users, services, requests, document uploads, and notifications.
 
-2. Install dependencies.
+> **Note:** Demo credentials are automatically saved to `SHOWCASE_ACCOUNTS.md`. These passwords are for development and demonstration purposes only. Do not use these credentials in a production environment.
 
+## Installation & Local Development
+
+### Prerequisites
+- Node.js (v20+)
+- MongoDB (Local or Atlas)
+- Cloudflare R2 or AWS S3 credentials (for production document storage)
+
+### Backend Setup
+1. Clone the repository and navigate to the root directory.
+2. Install dependencies:
+   ```bash
+   npm install
+   ```
+3. Copy the environment template:
+   ```bash
+   cp .env.example .env
+   ```
+4. Update `.env` with your local MongoDB URI and JWT secrets.
+5. Start the backend development server:
+   ```bash
+   npm run dev
+   ```
+
+### Frontend Setup
+1. Navigate to the frontend directory:
+   ```bash
+   cd frontend
+   ```
+2. Install dependencies:
+   ```bash
+   npm install
+   ```
+3. Start the frontend development server:
+   ```bash
+   npm run dev
+   ```
+
+## Running Tests
+To run the integration and regression test suite:
 ```bash
-npm install
+npm run test:all
 ```
 
-3. Create an environment file.
+## Security Notes
+- **Never commit your `.env` files.**
+- Always rotate JWT and Storage keys if exposed.
+- Keep Cloudflare R2 buckets private to prevent unauthorized document access.
 
-```bash
-cp .env.example .env
-```
+## Current Limitations
+- SMS Provider is currently mocked for development purposes; a real provider integration (e.g., Twilio) is required for production OTP routing.
+- Real courier APIs are currently mocked; delivery states are managed internally.
 
-4. Update `.env` with local credentials and strong JWT secrets.
+## Future Improvements
+- Online payment gateway integration (Stripe/Razorpay).
+- Real-time chat support between citizens and agents.
+- Comprehensive E2E testing for frontend workflows.
+- Native mobile application for on-the-go agents.
 
-5. Start MongoDB locally or configure a hosted MongoDB URI.
-
-6. Run seeders.
-
-```bash
-npm run seed:admin
-npm run seed:services
-```
-
-7. Start the server.
-
-```bash
-npm run dev
-```
-
-The API will run at:
-
-```text
-http://localhost:5001/api/v1
-```
-
-## Environment Variables
-
-```env
-NODE_ENV=development
-PORT=5001
-
-APP_NAME="Government Certificate Brokerage Service"
-API_VERSION=v1
-
-MONGODB_URI=mongodb://127.0.0.1:27017/gov_certificate_brokerage
-MONGODB_MAX_POOL_SIZE=10
-
-JWT_ACCESS_SECRET=replace-with-a-strong-access-token-secret
-JWT_REFRESH_SECRET=replace-with-a-strong-refresh-token-secret
-JWT_ACCESS_EXPIRES_IN=15m
-JWT_REFRESH_EXPIRES_IN=7d
-
-CORS_ORIGIN=http://localhost:3000
-RATE_LIMIT_WINDOW_MS=900000
-RATE_LIMIT_MAX_REQUESTS=100
-
-LOG_LEVEL=info
-REQUEST_BODY_LIMIT=10kb
-
-FRONTEND_URL=http://localhost:5173
-PASSWORD_RESET_TOKEN_TTL_MINUTES=15
-EMAIL_VERIFICATION_TOKEN_TTL_HOURS=24
-
-EMAIL_FROM="SevaSetu <no-reply@example.com>"
-SMTP_HOST=
-SMTP_PORT=587
-SMTP_SECURE=false
-SMTP_USER=
-SMTP_PASS=
-```
-
-## Seeder Commands
-
-Create or update the default admin:
-
-```bash
-npm run seed:admin
-```
-
-Default admin credentials:
-
-```text
-email: admin@example.com
-password: Admin@123
-```
-
-Seed default services:
-
-```bash
-npm run seed:services
-```
-
-Seeded services:
-
-- Income Certificate
-- Birth Certificate
-- Caste Certificate
-- Domicile Certificate
-- PAN Service
-- Aadhaar Service
-
-Seeders are idempotent and prevent duplicate records through upsert logic.
-
-## Available Scripts
-
-```bash
-npm run dev
-```
-
-Start the development server with Nodemon.
-
-```bash
-npm start
-```
-
-Start the production server.
-
-```bash
-npm test
-```
-
-Run Node.js tests.
-
-```bash
-npm run lint
-```
-
-Run ESLint.
-
-```bash
-npm run seed:admin
-```
-
-Seed the default admin user.
-
-```bash
-npm run seed:services
-```
-
-Seed default service catalog records.
-
-## Core API Areas
-
-Authentication:
-
-- Register
-- Login
-- Refresh token
-- Logout
-- Current user
-
-Services:
-
-- Create service
-- Update service
-- Activate/deactivate service
-- Soft delete service
-- List service catalog
-- View service details
-
-Documents:
-
-- Upload document
-- View document metadata
-- Verify document
-- Reject document
-- Soft delete document
-- View uploaded documents
-
-Requests:
-
-- Create request
-- Submit request
-- Cancel request
-- View own requests
-- View assigned requests
-- Assign agent
-- Update request progress/status
-- Track status history
-
-Agent Dashboard:
-
-- View assigned requests
-- View request details
-- Update progress
-- Upload additional documents
-- View dashboard statistics
-
-Admin Dashboard:
-
-- View platform metrics
-- View agents
-- Approve/reject/suspend agents
-- View all requests
-- Assign agents
-- Update request status
-
-## Future Enhancements
-
-- Payment integration
-- Notification service
-- Complaint management
-- Audit log module
-- Reporting and analytics
-- Background job processing
-- Cloud object storage for documents
-- Email and SMS verification
-- Refresh token device/session management
-- Automated test coverage
-- Docker and CI/CD pipeline
-- Production observability dashboards
+## Contributing
+Contributions are welcome! Please follow the guidelines outlined in `CONTRIBUTING.md`.
 
 ## License
-
-This project is currently marked as `UNLICENSED`.
+UNLICENSED - Contact the repository owner for permissions.

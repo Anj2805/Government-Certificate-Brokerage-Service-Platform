@@ -1,10 +1,13 @@
 import { useState, useEffect } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, useSearchParams, Link } from 'react-router-dom';
 import { authApi } from '../../api/authApi';
 import { PATHS } from '../../config/paths';
+import toast from 'react-hot-toast';
 
 const VerifyEmail = () => {
-  const { token } = useParams();
+  const { token: paramToken } = useParams();
+  const [searchParams] = useSearchParams();
+  const token = paramToken || searchParams.get('token');
   const [status, setStatus] = useState('loading');
   const [message, setMessage] = useState('');
 
@@ -14,9 +17,14 @@ const VerifyEmail = () => {
         await authApi.verifyEmail({ token });
         setStatus('success');
         setMessage('Your email has been verified successfully. You can now use all features of the platform.');
+        toast.success('Email verified successfully!');
+        // Force reload session in AuthContext by reloading window or refreshing
+        window.dispatchEvent(new Event('auth-refresh'));
       } catch (error) {
         setStatus('error');
-        setMessage(error.response?.data?.message || 'The verification link is invalid or has expired.');
+        const errMessage = error.response?.data?.message || 'The verification link is invalid or has expired.';
+        setMessage(errMessage);
+        toast.error(errMessage);
       }
     };
     if (token) verify();

@@ -1,13 +1,15 @@
 import { useState, useEffect, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom'; // HMR invalidate
 import { PATHS } from '../../config/paths';
 import { adminApi } from '../../api/adminApi';
+import toast from 'react-hot-toast';
 
 export default function ManageRequests() {
   const navigate = useNavigate();
   const [requests, setRequests] = useState([]);
   const [agents, setAgents] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [debouncedSearch, setDebouncedSearch] = useState('');
 
   // Advanced Filter state
   const [search, setSearch] = useState("");
@@ -23,14 +25,30 @@ export default function ManageRequests() {
   const itemsPerPage = 10;
 
   useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedSearch(search);
+      setCurrentPage(1); // Reset page on new search
+    }, 500);
+    return () => clearTimeout(handler);
+  }, [search]);
+
+  useEffect(() => {
     fetchData();
-  }, [currentPage]);
+  }, [currentPage, debouncedSearch, statusFilter, serviceFilter, agentFilter, dateRangeFilter]);
 
   const fetchData = async () => {
     setIsLoading(true);
     try {
       const [reqRes, agentRes] = await Promise.all([
-        adminApi.listRequests({ page: currentPage, limit: itemsPerPage }),
+        adminApi.listRequests({ 
+          page: currentPage, 
+          limit: itemsPerPage,
+          search: debouncedSearch,
+          status: statusFilter === 'All' ? undefined : statusFilter.toUpperCase(),
+          serviceId: serviceFilter === 'All' ? undefined : serviceFilter,
+          agent: agentFilter === 'All' ? undefined : agentFilter,
+          timeFilter: dateRangeFilter === 'All' ? undefined : dateRangeFilter
+        }),
         adminApi.listAgents({ limit: 100 })
       ]);
       setRequests(reqRes.data?.requests || []);
@@ -40,7 +58,7 @@ export default function ManageRequests() {
       setAgents(agentRes.data?.agents || []);
     } catch (err) {
       console.error(err);
-      alert('Failed to load requests');
+      toast.error('Failed to load requests');
     } finally {
       setIsLoading(false);
     }
@@ -62,46 +80,16 @@ export default function ManageRequests() {
       } else {
         await adminApi.assignAgent(selectedRequestId, newAgentId);
       }
-      alert(`Successfully assigned Agent to Request ${selectedRequestId.substring(0, 8)}`);
+      toast.success(`Successfully assigned Agent to Request ${selectedRequestId.substring(0, 8)}`);
       fetchData();
       setShowAssignModal(false);
     } catch (err) {
-      alert(err?.response?.data?.message || 'Failed to assign agent');
+      toast.error(err?.response?.data?.message || 'Failed to assign agent');
     }
   };
 
-  // Filter requests
-  const filteredRequests = requests.filter(req => {
-    // search text filter
-    const citizenName = `${req.citizen?.firstName || ''} ${req.citizen?.lastName || ''}`.toLowerCase();
-    const matchesSearch = req._id.toLowerCase().includes(search.toLowerCase()) ||
-                          citizenName.includes(search.toLowerCase());
-
-    // status filter
-    const matchesStatus = statusFilter === "All" || req.status === statusFilter.toLowerCase();
-
-    // service filter
-    const matchesService = serviceFilter === "All" || req.service?.name === serviceFilter;
-
-    // agent filter
-    const matchesAgent = agentFilter === "All" ||
-                         (agentFilter === "Unassigned" && !req.assignedAgent) ||
-                         (req.assignedAgent && req.assignedAgent._id === agentFilter);
-
-    // date range filter
-    let matchesDate = true;
-    if (dateRangeFilter === "Last 7 Days") {
-      const sevenDaysAgo = new Date();
-      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-      matchesDate = new Date(req.createdAt) >= sevenDaysAgo;
-    } else if (dateRangeFilter === "Last 30 Days") {
-      const thirtyDaysAgo = new Date();
-      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-      matchesDate = new Date(req.createdAt) >= thirtyDaysAgo;
-    }
-
-    return matchesSearch && matchesStatus && matchesService && matchesAgent && matchesDate;
-  });
+  // Filter requests (server-side handles it now)
+  const filteredRequests = requests;
 
   const paginate = (pageNumber) => {
     if (pageNumber >= 1 && pageNumber <= totalPages) {
@@ -114,17 +102,18 @@ export default function ManageRequests() {
       <div className="max-w-[1344px] w-full mx-auto px-6 py-8 flex-1 space-y-8">
 
         {/* Title Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div>
-            <h1 className="text-[28px] font-extrabold text-[#0f294a] tracking-tight">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-gradient-to-r from-[#13448a] to-[#1e58b0] rounded-3xl p-8 text-white shadow-xl relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-64 h-64 bg-white opacity-5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/3"></div>
+          <div className="relative z-10">
+            <h1 className="text-3xl font-extrabold tracking-tight">
               Manage Service Requests
             </h1>
-            <p className="text-[14.5px] text-gray-500 font-semibold mt-0.5">
+            <p className="text-blue-100 font-medium mt-2 max-w-xl text-sm leading-relaxed">
               Review, assign, and track the status of all public application requests.
             </p>
           </div>
 
-          <div className="inline-flex h-11 items-center px-4 rounded-lg bg-gray-50 border border-gray-200 text-[13px] font-bold text-gray-600">
+          <div className="relative z-10 inline-flex h-12 items-center px-5 rounded-xl bg-white/10 backdrop-blur-md border border-white/20 text-[14px] font-bold text-white shadow-lg">
             Total Requests: {totalItems}
           </div>
         </div>
@@ -311,21 +300,23 @@ export default function ManageRequests() {
                           </span>
                         )}
                       </td>
-                      <td className="px-6 py-4.5 text-right space-x-2 shrink-0">
-                        {req.status !== 'completed' && req.status !== 'rejected' && req.status !== 'draft' && (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setSelectedRequestId(req._id);
-                              setSelectedRequestObj(req);
-                              setNewAgentId(req.assignedAgent?._id || (agents.length > 0 ? agents[0]._id : ""));
-                              setShowAssignModal(true);
-                            }}
-                            className="h-8 px-2.5 rounded border border-[#e2e8f0] hover:border-[#13448a] hover:bg-[#13448a]/5 text-[11.5px] font-bold text-gray-700 hover:text-[#13448a] transition-all"
-                          >
-                            {req.assignedAgent ? 'Reassign Agent' : 'Assign Agent'}
-                          </button>
-                        )}
+                      <td className="px-6 py-4.5 text-right shrink-0 whitespace-nowrap">
+                        <div className="flex items-center justify-end gap-2">
+                          {req.status !== 'completed' && req.status !== 'rejected' && req.status !== 'draft' && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSelectedRequestId(req._id);
+                                setSelectedRequestObj(req);
+                                setNewAgentId(req.assignedAgent?._id || (agents.length > 0 ? agents[0]._id : ""));
+                                setShowAssignModal(true);
+                              }}
+                              className="h-8 px-2.5 rounded border border-[#e2e8f0] hover:border-[#13448a] hover:bg-[#13448a]/5 text-[11.5px] font-bold text-gray-700 hover:text-[#13448a] transition-all"
+                            >
+                              {req.assignedAgent ? 'Reassign' : 'Assign'}
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))
@@ -409,11 +400,56 @@ export default function ManageRequests() {
                   onChange={(e) => setNewAgentId(e.target.value)}
                   className="w-full h-11 px-3.5 rounded-lg border border-gray-200 text-gray-700 focus:ring-2 focus:ring-[#13448a] focus:border-[#13448a]"
                 >
+                  <option value="" disabled>Select an agent...</option>
                   {agents.filter(a => a.agentStatus === 'approved').map((ag, idx) => (
                     <option key={ag._id} value={ag._id}>{ag.firstName} {ag.lastName}</option>
                   ))}
                 </select>
               </div>
+
+              {newAgentId && (
+                <div className="p-4 bg-gray-50 rounded-xl border border-gray-100 space-y-3">
+                  {(() => {
+                    const agent = agents.find(a => a._id === newAgentId);
+                    if (!agent) return null;
+                    return (
+                      <>
+                        <div className="flex items-center gap-3 pb-3 border-b border-gray-200">
+                          <div className="h-10 w-10 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center font-bold text-sm uppercase">
+                            {agent.firstName?.[0]}{agent.lastName?.[0]}
+                          </div>
+                          <div>
+                            <p className="text-[14px] font-bold text-gray-900">{agent.firstName} {agent.lastName}</p>
+                            <p className="text-[12px] font-semibold text-gray-500">{agent.email}</p>
+                          </div>
+                        </div>
+                        <div className="flex gap-4 mb-2">
+                          <div className="flex-1">
+                            <span className="block text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-1">Department</span>
+                            <span className="text-[13px] font-bold text-gray-800 bg-gray-100 px-2 py-1 rounded-md">{agent.department || 'Central Services'}</span>
+                          </div>
+                          <div className="flex-1">
+                            <span className="block text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-1">Designation</span>
+                            <span className="text-[13px] font-semibold text-gray-700">{agent.designation || 'Agent'}</span>
+                          </div>
+                        </div>
+                        <div>
+                          <span className="block text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-1">Background / Notes</span>
+                          <p className="text-[13px] font-medium text-gray-700 leading-relaxed whitespace-pre-wrap bg-white p-3 rounded-lg border border-gray-100">
+                            {agent.agentBackground || 'No background information available.'}
+                          </p>
+                        </div>
+                        <div className="flex justify-between items-center pt-2">
+                          <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Status</span>
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase bg-emerald-100 text-emerald-700">
+                            {agent.agentStatus}
+                          </span>
+                        </div>
+                      </>
+                    );
+                  })()}
+                </div>
+              )}
 
               <div className="pt-2 flex gap-3">
                 <button

@@ -49,6 +49,10 @@ const serviceSchema = new mongoose.Schema(
       default: true,
       index: true,
     },
+    requiresIdVerification: {
+      type: Boolean,
+      default: false,
+    },
     deletedAt: {
       type: Date,
       default: null,

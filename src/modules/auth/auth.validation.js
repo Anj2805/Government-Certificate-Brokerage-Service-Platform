@@ -33,12 +33,44 @@ const register = [
     .optional()
     .isIn([UserRoles.CITIZEN, UserRoles.AGENT])
     .withMessage('public registration is only allowed for citizen or agent accounts'),
+  body('address')
+    .if(body('role').equals(UserRoles.CITIZEN))
+    .trim()
+    .notEmpty()
+    .withMessage('Address is required for citizens')
+    .isLength({ max: 255 })
+    .withMessage('Address cannot exceed 255 characters'),
+  body('city')
+    .if(body('role').equals(UserRoles.CITIZEN))
+    .trim()
+    .notEmpty()
+    .withMessage('City is required for citizens')
+    .isLength({ max: 100 })
+    .withMessage('City cannot exceed 100 characters'),
+  body('state')
+    .if(body('role').equals(UserRoles.CITIZEN))
+    .trim()
+    .notEmpty()
+    .withMessage('State is required for citizens')
+    .isLength({ max: 100 })
+    .withMessage('State cannot exceed 100 characters'),
+  body('postalCode')
+    .if(body('role').equals(UserRoles.CITIZEN))
+    .trim()
+    .notEmpty()
+    .withMessage('Postal code is required for citizens')
+    .isLength({ max: 20 })
+    .withMessage('Postal code cannot exceed 20 characters'),
   passwordRule,
 ];
 
 const login = [
   body('email').trim().isEmail().normalizeEmail().withMessage('email must be valid'),
   body('password').notEmpty().withMessage('password is required'),
+  body('role')
+    .optional()
+    .isIn([UserRoles.CITIZEN, UserRoles.AGENT, UserRoles.ADMIN])
+    .withMessage('role must be valid'),
 ];
 
 const refreshToken = [

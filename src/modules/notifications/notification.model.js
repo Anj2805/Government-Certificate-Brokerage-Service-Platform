@@ -30,7 +30,7 @@ const notificationSchema = new mongoose.Schema(
     request: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Request',
-      required: true,
+      required: false,
       index: true,
     },
     isRead: {

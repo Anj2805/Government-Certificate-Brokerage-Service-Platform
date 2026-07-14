@@ -119,6 +119,12 @@ test('Phase 13 - Vercel Serverless Architecture Verification', async (t) => {
         serviceCharge: service.serviceCharge,
         requiredDocuments: service.requiredDocuments,
       },
+      applicantSnapshot: {
+        firstName: citizen.firstName,
+        lastName: citizen.lastName,
+        email: citizen.email,
+        phone: citizen.phone
+      },
       assignedAgent: agent._id,
       status: RequestStatus.DRAFT,
       applicationData: {},

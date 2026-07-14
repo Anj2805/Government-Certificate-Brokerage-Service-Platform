@@ -94,10 +94,17 @@ const save = async (tempFilePath, extension = '') => {
     }
   } else if (provider === 's3') {
     const fileBuffer = await fs.readFile(tempFilePath);
+    const ext = require('path').extname(storageKey).toLowerCase();
+    let contentType = 'application/octet-stream';
+    if (ext === '.png') contentType = 'image/png';
+    else if (ext === '.jpg' || ext === '.jpeg') contentType = 'image/jpeg';
+    else if (ext === '.pdf') contentType = 'application/pdf';
+
     const command = new PutObjectCommand({
       Bucket: process.env.S3_BUCKET,
       Key: storageKey,
       Body: fileBuffer,
+      ContentType: contentType
     });
     await s3Client.send(command);
     await fs.unlink(tempFilePath).catch(() => {});
@@ -200,10 +207,40 @@ const getDownloadStrategy = async (storageKey, originalName) => {
   }
 };
 
+const getViewStrategy = async (storageKey) => {
+  if (provider === 'local') {
+    return {
+      type: 'local',
+      physicalPath: getSafePath(storageKey)
+    };
+  } else if (provider === 's3') {
+    const { GetObjectCommand } = require('@aws-sdk/client-s3');
+    const ext = require('path').extname(storageKey).toLowerCase();
+    let contentType = 'application/octet-stream';
+    if (ext === '.png') contentType = 'image/png';
+    else if (ext === '.jpg' || ext === '.jpeg') contentType = 'image/jpeg';
+    else if (ext === '.pdf') contentType = 'application/pdf';
+
+    const getCommand = new GetObjectCommand({
+      Bucket: process.env.S3_BUCKET,
+      Key: storageKey,
+      ResponseContentDisposition: 'inline',
+      ResponseContentType: contentType
+    });
+
+    const url = await getSignedUrl(s3Client, getCommand, { expiresIn: 3600 });
+    return {
+      type: 'redirect',
+      url
+    };
+  }
+};
+
 module.exports = {
   save,
   exists,
   delete: remove,
   getDownloadStrategy,
+  getViewStrategy,
   generateStorageKey,
 };

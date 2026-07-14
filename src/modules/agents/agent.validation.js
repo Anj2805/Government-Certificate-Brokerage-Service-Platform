@@ -26,11 +26,13 @@ const updateProgress = [
   ...mongoIdParam,
   body('status')
     .isIn([
-      RequestStatus.IN_PROGRESS,
-      RequestStatus.DOCUMENTS_REQUIRED,
+      RequestStatus.UNDER_REVIEW,
+      RequestStatus.CORRECTION_REQUIRED,
       RequestStatus.COMPLETED,
+      RequestStatus.APPROVED,
+      RequestStatus.REJECTED,
     ])
-    .withMessage('status must be in_progress, documents_required, or completed'),
+    .withMessage('status must be under_review, correction_required, completed, approved, or rejected'),
   body('reason')
     .optional({ nullable: true, checkFalsy: true })
     .trim()
@@ -52,9 +54,61 @@ const uploadAdditionalDocument = [
     .toLowerCase(),
 ];
 
+const updateProfile = [
+  body('firstName')
+    .optional()
+    .trim()
+    .isLength({ min: 2, max: 80 })
+    .withMessage('First name must be between 2 and 80 characters'),
+  body('lastName')
+    .optional()
+    .trim()
+    .isLength({ min: 2, max: 80 })
+    .withMessage('Last name must be between 2 and 80 characters'),
+  body('phone')
+    .optional({ nullable: true, checkFalsy: true })
+    .trim()
+    .isMobilePhone()
+    .withMessage('Invalid phone number format')
+    .isLength({ max: 20 }),
+  body('address')
+    .optional({ nullable: true, checkFalsy: true })
+    .trim()
+    .isLength({ max: 255 })
+    .withMessage('Address must be at most 255 characters'),
+  body('city')
+    .optional({ nullable: true, checkFalsy: true })
+    .trim()
+    .isLength({ max: 100 })
+    .withMessage('City must be at most 100 characters'),
+  body('state')
+    .optional({ nullable: true, checkFalsy: true })
+    .trim()
+    .isLength({ max: 100 })
+    .withMessage('State must be at most 100 characters'),
+  body('postalCode')
+    .optional({ nullable: true, checkFalsy: true })
+    .trim()
+    .isLength({ max: 20 })
+    .withMessage('Postal code must be at most 20 characters'),
+  body('preferredLanguage')
+    .optional({ nullable: true, checkFalsy: true })
+    .trim()
+    .isLength({ max: 50 }),
+  body('languagesSupported')
+    .optional({ nullable: true, checkFalsy: true })
+    .isArray()
+    .withMessage('languagesSupported must be an array'),
+  body('languagesSupported.*')
+    .isString()
+    .trim()
+    .isLength({ min: 1, max: 50 }),
+];
+
 module.exports = {
   getRequestDetails: mongoIdParam,
   listAssignedRequests,
   updateProgress,
   uploadAdditionalDocument,
+  updateProfile,
 };

@@ -1,6 +1,9 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import { PATHS } from '../../config/paths';
+import { Eye } from 'lucide-react';
 import { adminApi } from '../../api/adminApi';
+import toast from 'react-hot-toast';
 
 export default function ManageAgents() {
   const [agents, setAgents] = useState([]);
@@ -10,6 +13,7 @@ export default function ManageAgents() {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalItems, setTotalItems] = useState(0);
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const itemsPerPage = 10;
 
   // Detail Modal state
@@ -19,31 +23,44 @@ export default function ManageAgents() {
   const fetchAgents = async () => {
     setIsLoading(true);
     try {
-      const response = await adminApi.listAgents({ page: currentPage, limit: itemsPerPage });
+      const response = await adminApi.listAgents({ 
+        page: currentPage, 
+        limit: itemsPerPage,
+        search: debouncedSearch,
+        status: statusFilter === 'All' ? undefined : statusFilter.toLowerCase()
+      });
       setAgents(response.data?.agents || []);
       const meta = response.meta || {};
       setTotalPages(meta.totalPages || 1);
       setTotalItems(meta.total || (response.data?.agents || []).length);
     } catch (err) {
       console.error(err);
-      alert('Failed to load agents.');
+      toast.error('Failed to load agents.');
     } finally {
       setIsLoading(false);
     }
   };
 
   useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedSearch(searchTerm);
+      setCurrentPage(1); // Reset page on new search
+    }, 500);
+    return () => clearTimeout(handler);
+  }, [searchTerm]);
+
+  useEffect(() => {
     fetchAgents();
-  }, [currentPage]);
+  }, [currentPage, debouncedSearch, statusFilter]);
 
   const handleApprove = async (agentId) => {
     try {
       await adminApi.approveAgent(agentId);
-      alert('Agent approved successfully.');
+      toast.success('Agent approved successfully.');
       fetchAgents();
       setShowDetailModal(false);
     } catch (err) {
-      alert(err?.response?.data?.message || 'Failed to approve agent');
+      toast.error(err?.response?.data?.message || 'Failed to approve agent');
     }
   };
 
@@ -52,11 +69,11 @@ export default function ManageAgents() {
     if (reason === null) return;
     try {
       await adminApi.rejectAgent(agentId, reason);
-      alert('Agent rejected successfully.');
+      toast.success('Agent rejected successfully.');
       fetchAgents();
       setShowDetailModal(false);
     } catch (err) {
-      alert(err?.response?.data?.message || 'Failed to reject agent');
+      toast.error(err?.response?.data?.message || 'Failed to reject agent');
     }
   };
 
@@ -65,23 +82,16 @@ export default function ManageAgents() {
     if (reason === null) return;
     try {
       await adminApi.suspendAgent(agentId, reason);
-      alert('Agent suspended successfully.');
+      toast.success('Agent suspended successfully.');
       fetchAgents();
       setShowDetailModal(false);
     } catch (err) {
-      alert(err?.response?.data?.message || 'Failed to suspend agent');
+      toast.error(err?.response?.data?.message || 'Failed to suspend agent');
     }
   };
 
-  // Filter list (client-side for search term, although the API supports server side search)
-  const filteredAgents = agents.filter(ag => {
-    const matchesSearch = (ag.firstName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          (ag.lastName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          ag.email.toLowerCase().includes(searchTerm.toLowerCase());
-
-    const matchesStatus = statusFilter === "All" || ag.agentStatus === statusFilter.toLowerCase();
-    return matchesSearch && matchesStatus;
-  });
+  // Server-side filtering is active, so we just use the agents array directly
+  const filteredAgents = agents;
 
   const paginate = (pageNumber) => {
     if (pageNumber >= 1 && pageNumber <= totalPages) {
@@ -96,26 +106,27 @@ export default function ManageAgents() {
       <div className="max-w-[1344px] w-full mx-auto px-6 py-8 flex-1 space-y-8">
 
         {/* Header Title */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div>
-            <h1 className="text-[28px] font-extrabold text-[#0f294a] tracking-tight">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-gradient-to-r from-[#13448a] to-[#1e58b0] rounded-3xl p-8 text-white shadow-xl relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-64 h-64 bg-white opacity-5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/3"></div>
+          <div className="relative z-10">
+            <h1 className="text-3xl font-extrabold tracking-tight">
               Manage Service Agents
             </h1>
-            <p className="text-[14.5px] text-gray-500 font-semibold mt-0.5">
-              Register, approve, verify, and moderate government service agents.
+            <p className="text-blue-100 font-medium mt-2 max-w-xl text-sm leading-relaxed">
+              Register, approve, verify, and moderate government service agents across the network.
             </p>
           </div>
 
-          <div className="inline-flex h-11 items-center px-4 rounded-lg bg-gray-50 border border-gray-200 text-[13px] font-bold text-gray-600">
+          <div className="relative z-10 inline-flex h-12 items-center px-5 rounded-xl bg-white/10 backdrop-blur-md border border-white/20 text-[14px] font-bold text-white shadow-lg">
             Total Registrations: {totalItems}
           </div>
         </div>
 
         {/* Filter and Search Bar */}
-        <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
-          <div className="relative flex-1 max-w-md">
-            <span className="absolute inset-y-0 left-0 flex items-center pl-3.5 pointer-events-none text-gray-400">
-              <svg style={{ width: '16px', height: '16px' }} fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+        <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4 bg-white/80 backdrop-blur-md p-4 rounded-2xl shadow-sm border border-slate-200/60">
+          <div className="relative flex-1 max-w-lg group">
+            <span className="absolute inset-y-0 left-0 flex items-center pl-4 pointer-events-none text-slate-400 group-focus-within:text-[#13448a] transition-colors">
+              <svg style={{ width: '18px', height: '18px' }} fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
                 <circle cx="11" cy="11" r="8" />
                 <line x1="21" y1="21" x2="16.65" y2="16.65" />
               </svg>
@@ -125,7 +136,7 @@ export default function ManageAgents() {
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               placeholder="Search agent ID, name, or department..."
-              className="w-full h-11 pl-10 pr-4 rounded-lg bg-white border border-[#e2e8f0] focus:ring-2 focus:ring-[#13448a] focus:border-[#13448a] text-[13.5px] font-semibold text-gray-700 placeholder-gray-400 transition-all outline-none"
+              className="w-full h-12 pl-12 pr-4 rounded-xl bg-slate-50/50 border border-slate-200 focus:ring-2 focus:ring-[#13448a]/20 focus:border-[#13448a] text-[14px] font-medium text-slate-700 placeholder-slate-400 transition-all outline-none hover:bg-white"
             />
           </div>
 
@@ -192,7 +203,7 @@ export default function ManageAgents() {
                         </div>
                       </td>
                       <td className="px-6 py-4.5 font-bold text-[#13448a]">{ag._id.substring(0, 8)}...</td>
-                      <td className="px-6 py-4.5 text-gray-700">Central Services</td>
+                      <td className="px-6 py-4.5 text-gray-700">{ag.department || 'N/A'}</td>
                       <td className="px-6 py-4.5 text-gray-500">{new Date(ag.createdAt).toLocaleDateString()}</td>
                       <td className="px-6 py-4.5">
                         {ag.agentStatus === "approved" && (
@@ -216,52 +227,61 @@ export default function ManageAgents() {
                           </span>
                         )}
                       </td>
-                      <td className="px-6 py-4.5 text-right space-x-2 shrink-0">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setSelectedAgent(ag);
-                            setShowDetailModal(true);
-                          }}
-                          className="h-8 px-3 rounded border border-[#e2e8f0] hover:border-[#13448a] hover:bg-[#13448a]/5 text-[11.5px] font-bold text-gray-700 hover:text-[#13448a] transition-all"
-                        >
-                          View Credentials
-                        </button>
+                      <td className="px-6 py-4.5 text-right shrink-0 whitespace-nowrap">
+                        <div className="flex items-center justify-end gap-2">
+                          <Link 
+                            to={PATHS.ADMIN_AGENT_DETAILS.replace(':id', ag._id)}
+                            className="inline-flex items-center justify-center p-2 text-gray-400 hover:text-[#13448a] hover:bg-blue-50 rounded-lg transition-colors border border-transparent hover:border-blue-200"
+                            title="View Details"
+                          >
+                            <Eye className="w-4 h-4" />
+                          </Link>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedAgent(ag);
+                              setShowDetailModal(true);
+                            }}
+                            className="h-8 px-3 rounded border border-[#e2e8f0] hover:border-[#13448a] hover:bg-[#13448a]/5 text-[11.5px] font-bold text-gray-700 hover:text-[#13448a] transition-all"
+                          >
+                            Credentials
+                          </button>
 
-                        {ag.agentStatus === "pending" ? (
-                          <>
+                          {ag.agentStatus === "pending" ? (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => handleApprove(ag._id)}
+                                className="h-8 px-3 rounded border border-emerald-150 hover:bg-emerald-50 text-[11.5px] font-bold text-emerald-600 hover:border-emerald-300 transition-all"
+                              >
+                                Approve
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleReject(ag._id)}
+                                className="h-8 px-3 rounded border border-red-150 hover:bg-red-50 text-[11.5px] font-bold text-red-600 hover:border-red-300 transition-all"
+                              >
+                                Reject
+                              </button>
+                            </>
+                          ) : ag.agentStatus === "approved" ? (
+                            <button
+                              type="button"
+                              onClick={() => handleSuspend(ag._id)}
+                              className="h-8 px-3 rounded border border-amber-150 hover:bg-amber-50 text-[11.5px] font-bold text-amber-600 hover:border-amber-300 transition-all"
+                            >
+                              Suspend
+                            </button>
+                          ) : (
                             <button
                               type="button"
                               onClick={() => handleApprove(ag._id)}
-                              className="h-8 px-3 rounded bg-emerald-600 hover:bg-emerald-700 text-[11.5px] font-bold text-white transition-colors"
+                              className="h-8 px-3 rounded border border-emerald-200 hover:bg-emerald-50 text-[11.5px] font-bold text-emerald-600 hover:text-emerald-700 transition-all"
                             >
-                              Approve
+                              Re-Approve
                             </button>
-                            <button
-                              type="button"
-                              onClick={() => handleReject(ag._id)}
-                              className="h-8 px-3 rounded bg-red-600 hover:bg-red-700 text-[11.5px] font-bold text-white transition-colors"
-                            >
-                              Reject
-                            </button>
-                          </>
-                        ) : ag.agentStatus === "approved" ? (
-                          <button
-                            type="button"
-                            onClick={() => handleSuspend(ag._id)}
-                            className="h-8 px-3 rounded border border-amber-200 hover:bg-amber-50 text-[11.5px] font-bold text-amber-600 hover:text-amber-700 transition-all"
-                          >
-                            Suspend
-                          </button>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => handleApprove(ag._id)}
-                            className="h-8 px-3 rounded border border-emerald-200 hover:bg-emerald-50 text-[11.5px] font-bold text-emerald-600 hover:text-emerald-700 transition-all"
-                          >
-                            Re-Approve
-                          </button>
-                        )}
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))
@@ -337,7 +357,28 @@ export default function ManageAgents() {
               </div>
               <div>
                 <h4 className="text-[18px] font-extrabold text-gray-800">{selectedAgent.firstName} {selectedAgent.lastName}</h4>
-                <p className="text-[12.5px] font-bold text-[#13448a] mt-0.5">Central Services</p>
+                <div className="mt-0.5 flex items-center gap-2">
+                  <select
+                    value={selectedAgent.department || "Central Services"}
+                    onChange={async (e) => {
+                      try {
+                        await adminApi.updateAgentDepartment(selectedAgent._id, e.target.value);
+                        toast.success("Department updated");
+                        setSelectedAgent({ ...selectedAgent, department: e.target.value });
+                        fetchAgents();
+                      } catch (err) {
+                        toast.error("Failed to update department");
+                      }
+                    }}
+                    className="text-[12.5px] font-bold text-[#13448a] bg-blue-50 border border-blue-100 rounded px-2 py-0.5 outline-none cursor-pointer hover:bg-blue-100 transition-colors"
+                  >
+                    <option value="Central Services">Central Services</option>
+                    <option value="Revenue Department">Revenue Department</option>
+                    <option value="Health & Family Welfare">Health & Family Welfare</option>
+                    <option value="Social Justice & Empowerment">Social Justice & Empowerment</option>
+                    <option value="Income Tax Department">Income Tax Department</option>
+                  </select>
+                </div>
                 <div className="mt-1.5 flex items-center gap-2">
                   <span className="text-[11.5px] text-gray-400 font-semibold">ID: {selectedAgent._id.substring(0, 8)}</span>
                   <span className={`inline-flex px-2 py-0.5 rounded text-[10px] font-extrabold uppercase tracking-wide border ${

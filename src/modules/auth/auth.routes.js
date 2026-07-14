@@ -10,6 +10,8 @@ const router = Router();
 router.post('/register', authLimiter, validateRequest(authValidation.register), authController.register);
 router.post('/login', authLimiter, validateRequest(authValidation.login), authController.login);
 router.post('/refresh-token', validateRequest(authValidation.refreshToken), authController.refreshToken);
+router.post('/2fa/verify', authController.verifyTwoFactor);
+router.post('/2fa/setup', authController.setupTwoFactor);
 router.post(
   '/forgot-password',
   forgotPasswordLimiter,

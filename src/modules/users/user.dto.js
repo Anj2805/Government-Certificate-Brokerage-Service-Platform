@@ -20,6 +20,26 @@ const toSafeUser = (user) => {
     emailVerified: plainUser.emailVerified ?? false,
     ...(plainUser.emailVerifiedAt ? { emailVerifiedAt: plainUser.emailVerifiedAt } : {}),
     ...(plainUser.agentStatus ? { agentStatus: plainUser.agentStatus } : {}),
+    
+    // Profile Fields
+    ...(plainUser.profilePhoto ? { profilePhoto: plainUser.profilePhoto } : {}),
+    ...(plainUser.address ? { address: plainUser.address } : {}),
+    ...(plainUser.city ? { city: plainUser.city } : {}),
+    ...(plainUser.state ? { state: plainUser.state } : {}),
+    ...(plainUser.postalCode ? { postalCode: plainUser.postalCode } : {}),
+    ...(plainUser.preferredLanguage ? { preferredLanguage: plainUser.preferredLanguage } : {}),
+    ...(plainUser.languagesSupported ? { languagesSupported: plainUser.languagesSupported } : {}),
+    ...(plainUser.designation ? { designation: plainUser.designation } : {}),
+    ...(plainUser.department ? { department: plainUser.department } : {}),
+    ...(plainUser.serviceSpecialization ? { serviceSpecialization: plainUser.serviceSpecialization } : {}),
+    ...(plainUser.agentIdentifier ? { agentIdentifier: plainUser.agentIdentifier } : {}),
+    
+    // ID Verification Fields
+    ...(plainUser.idProofStatus ? { idProofStatus: plainUser.idProofStatus } : {}),
+    ...(plainUser.idProofType ? { idProofType: plainUser.idProofType } : {}),
+    ...(plainUser.idProofDocument ? { idProofDocument: plainUser.idProofDocument } : {}),
+    ...(plainUser.idProofRejectionReason ? { idProofRejectionReason: plainUser.idProofRejectionReason } : {}),
+
     createdAt: plainUser.createdAt,
     updatedAt: plainUser.updatedAt,
   };

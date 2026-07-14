@@ -6,50 +6,67 @@ import { brandAssets } from '../../config/brandAssets';
 import { PATHS } from '../../config/paths';
 import { getDashboardPathByRole } from '../../config/roleRoutes';
 import { useAuth } from '../../hooks/useAuth';
+import toast from 'react-hot-toast';
 
 export default function Login() {
-  const { register, handleSubmit } = useForm();
+  const { register, handleSubmit } = useForm({
+    defaultValues: {
+      email: localStorage.getItem('rememberedEmail') || '',
+      rememberMe: localStorage.getItem('rememberMe') === 'true',
+    }
+  });
   const { login, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
-  const [selectedRole, setSelectedRole] = useState('citizen');
+  const selectedRole = 'citizen';
   const [showPassword, setShowPassword] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const successMessage = location.state?.message;
 
   const onSubmit = async (values) => {
     setErrorMessage('');
+    
+    if (values.rememberMe) {
+      localStorage.setItem('rememberedEmail', values.email);
+      localStorage.setItem('rememberMe', 'true');
+    } else {
+      localStorage.removeItem('rememberedEmail');
+      localStorage.removeItem('rememberMe');
+    }
+
     try {
       const user = await login({ ...values, role: selectedRole });
-      if (user.role === 'agent') {
-        if (!user.emailVerified) {
-          await logout();
-          setErrorMessage(
-            <span>
-              Email verification is required to access agent services.{' '}
-              <Link to={PATHS.RESEND_VERIFICATION} className="underline font-bold text-red-700 hover:text-red-800">
-                Resend verification link
-              </Link>
-            </span>
-          );
-          return;
-        }
-        if (user.agentStatus === 'pending') {
-          await logout();
-          setErrorMessage('Your agent account application is pending administrator approval. Please wait for an administrator to review and approve your account.');
-          return;
-        }
-      }
       const fromLocation = location.state?.from;
       const redirectTo = fromLocation?.pathname || (typeof fromLocation === 'string' ? fromLocation : getDashboardPathByRole(user.role));
       const carryState = fromLocation?.state || {};
+      toast.success('Successfully logged in');
       navigate(redirectTo, { 
         replace: true, 
         state: { ...carryState, ...location.state } 
       });
-    } catch (err) {
-      setErrorMessage(err.response?.data?.message || 'Invalid email or password');
+    } catch (error) {
+      const msg = error?.response?.data?.message || error?.message || 'Login failed. Please try again.';
+      toast.error(msg);
+      
+      if (msg.includes('Email verification is required')) {
+        setErrorMessage(
+          <span>
+            {msg}{' '}
+            <Link to={PATHS.RESEND_VERIFICATION} className="underline font-bold text-red-700 hover:text-red-800">
+              Resend verification link
+            </Link>
+          </span>
+        );
+      } else if (msg.includes('Administrators must log in via the Admin portal')) {
+        toast.error('Redirecting to Admin portal...');
+        setTimeout(() => navigate(PATHS.ADMIN_LOGIN), 1500);
+      } else if (msg.includes('registered as an Agent')) {
+        toast.error('Redirecting to Agent portal...');
+        setTimeout(() => navigate(PATHS.AGENT_LOGIN), 1500);
+      } else {
+        setErrorMessage(msg);
+      }
     }
   };
 
@@ -70,7 +87,7 @@ export default function Login() {
               <div className="grid h-[72px] w-[72px] place-items-center rounded-full bg-white shadow-md border border-[#e2e8f0]">
                 <img src={brandAssets.favicon} alt="SevaSetu Shield Emblem" className="h-11 w-11 object-contain" />
               </div>
-              <h1 id="login-title" className="mt-4 text-[26px] font-extrabold text-[#0f294a] tracking-tight">Welcome Back!</h1>
+              <h1 id="login-title" className="mt-4 text-[26px] font-extrabold text-[#0f294a] tracking-tight">Citizen Portal</h1>
               <p className="mt-1 text-[13px] font-medium text-[#6b7280]">Secure access to government services</p>
             </div>
 
@@ -86,37 +103,7 @@ export default function Login() {
               </div>
             )}
 
-            {/* Role Tabs */}
-            <div className="mt-6 grid grid-cols-2 border-b border-[#e2e8f0]" role="tablist" aria-label="Login role">
-              <button
-                type="button"
-                onClick={() => setSelectedRole('citizen')}
-                className={`flex h-12 items-center justify-center gap-2 text-[14px] font-bold transition-all ${
-                  selectedRole === 'citizen' 
-                    ? 'border-b-2 border-[#13448a] text-[#13448a]' 
-                    : 'text-[#94a3b8] hover:text-[#13448a]'
-                }`}
-              >
-                <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" viewBox="0 0 24 24">
-                  <path d="M20 21a8 8 0 0 0-16 0M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z" />
-                </svg>
-                Citizen
-              </button>
-              <button
-                type="button"
-                onClick={() => setSelectedRole('agent')}
-                className={`flex h-12 items-center justify-center gap-2 text-[14px] font-bold transition-all ${
-                  selectedRole === 'agent' 
-                    ? 'border-b-2 border-[#13448a] text-[#13448a]' 
-                    : 'text-[#94a3b8] hover:text-[#13448a]'
-                }`}
-              >
-                <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" viewBox="0 0 24 24">
-                  <path d="M10 6V5a2 2 0 0 1 2-2h0a2 2 0 0 1 2 2v1m-9 0h14v13H5V6Zm0 5h14" />
-                </svg>
-                Agent
-              </button>
-            </div>
+            {/* Removed Role Tabs */}
 
             <form onSubmit={handleSubmit(onSubmit)} className="mt-6 space-y-5">
               {/* Username/Email Field */}
@@ -191,6 +178,21 @@ export default function Login() {
                 </Link>
               </div>
 
+              <div className="mt-6 text-center space-y-4">
+                <p className="text-[13px] font-medium text-[#6b7280]">
+                  Don't have an account?{' '}
+                  <Link to={PATHS.REGISTER} className="font-bold text-[#13448a] hover:text-[#0f294a] underline decoration-[#13448a]/30 underline-offset-4 transition-colors">
+                    Register here
+                  </Link>
+                </p>
+                <p className="text-[13px] font-medium text-[#6b7280] pt-4 border-t border-gray-100">
+                  Are you an Agent?{' '}
+                  <Link to={PATHS.AGENT_LOGIN} className="font-bold text-[#13448a] hover:text-[#0f294a] underline decoration-[#13448a]/30 underline-offset-4 transition-colors">
+                    Login here
+                  </Link>
+                </p>
+              </div>
+
               {/* Secure Login Button */}
               <button 
                 type="submit" 
@@ -219,7 +221,7 @@ export default function Login() {
                 <line x1="19" y1="8" x2="19" y2="14" />
                 <line x1="22" y1="11" x2="16" y2="11" />
               </svg>
-              Create New {selectedRole === 'agent' ? 'Agent' : 'Citizen'} Account
+              Create New Citizen Account
             </Link>
 
             {/* Bottom Verification Green Badges */}

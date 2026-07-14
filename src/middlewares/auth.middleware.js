@@ -19,7 +19,11 @@ const extractBearerToken = (authorizationHeader) => {
 
 const authenticate = async (req, _res, next) => {
   try {
-    const token = extractBearerToken(req.headers.authorization);
+    let token = extractBearerToken(req.headers.authorization);
+    
+    if (!token && req.query.token) {
+      token = req.query.token;
+    }
 
     if (!token) {
       throw new ApiError(httpStatus.UNAUTHORIZED, 'Authentication token is required');

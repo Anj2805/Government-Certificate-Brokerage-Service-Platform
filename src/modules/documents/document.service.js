@@ -131,6 +131,43 @@ const uploadDocument = async ({ file, payload, user, reqId }) => {
     const logger = require('../../config/logger');
     logger.info({ audit: true, eventType: 'DOCUMENT_UPLOADED', requestId: reqId, actorId: user.id, documentId: document.id, requestReference: payload.requestId }, 'Document uploaded successfully');
 
+    // Notify citizen if uploaded by an agent
+    if (user.role === UserRoles.AGENT && ownerUser) {
+      try {
+        const User = require('../users/user.model');
+        const citizen = await User.findById(ownerUser);
+        if (citizen) {
+          const notificationService = require('../notifications/notification.service');
+          const emailService = require('../../services/email.service');
+          
+          const docTypeStr = (document.documentType || 'Document').replace('_', ' ').toUpperCase();
+          
+          await notificationService.createNotification({
+            recipientId: ownerUser,
+            type: 'DOCUMENT_UPLOADED_BY_AGENT',
+            eventId: document.id,
+            requestId: payload.requestId,
+            title: 'New Official Document Attached',
+            message: `An agent has uploaded a ${docTypeStr} to your application.`,
+          });
+
+          const emailHtml = `
+            <p>Dear ${citizen.firstName},</p>
+            <p>An official document has been attached to your application by an agent.</p>
+            <p><strong>Document Title:</strong> ${document.title || document.originalName}</p>
+            <p><strong>Document Type:</strong> ${docTypeStr}</p>
+            <p>Please log in to your SevaSetu dashboard and check the Document Gallery on your Request Details page to view or download it.</p>
+            <br/>
+            <p>Regards,</p>
+            <p>The SevaSetu Team</p>
+          `;
+          await emailService.sendEmail(citizen.email, 'New Document Added to Your Application', emailHtml);
+        }
+      } catch (err) {
+        logger.error({ err, documentId: document.id }, 'Failed to send notification or email to citizen for agent document upload');
+      }
+    }
+
     return document;
   } catch (error) {
     if (file.storageKey) {

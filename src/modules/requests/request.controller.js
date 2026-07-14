@@ -68,10 +68,19 @@ const getRequestDetails = asyncHandler(async (req, res) => {
 });
 
 const submitRequest = asyncHandler(async (req, res) => {
-  const request = await requestService.submitRequest(req.params.id, req.user, req.body.reason, req.id);
+  const request = await requestService.submitRequest(req.params.id, req.user, req.body, req.id);
 
   return ApiResponse.success(res, {
     message: 'Request submitted successfully',
+    data: { request },
+  });
+});
+
+const recordPayment = asyncHandler(async (req, res) => {
+  const request = await requestService.recordPayment(req.params.id, req.user, req.body, req.id);
+
+  return ApiResponse.success(res, {
+    message: 'Payment recorded successfully',
     data: { request },
   });
 });
@@ -191,6 +200,24 @@ const attachDocument = asyncHandler(async (req, res) => {
   });
 });
 
+const dispatchDelivery = asyncHandler(async (req, res) => {
+  const request = await requestService.dispatchDelivery(req.params.id, req.user, req.id);
+
+  return ApiResponse.success(res, {
+    message: 'Request dispatched successfully',
+    data: { request },
+  });
+});
+
+const verifyDelivery = asyncHandler(async (req, res) => {
+  const request = await requestService.verifyDelivery(req.params.id, req.user, req.body, req.id);
+
+  return ApiResponse.success(res, {
+    message: 'Delivery verification completed',
+    data: { request },
+  });
+});
+
 module.exports = {
   assignAgent,
   reassignAgent,
@@ -209,4 +236,7 @@ module.exports = {
   rejectRequest,
   getRequestsSummary,
   attachDocument,
+  recordPayment,
+  dispatchDelivery,
+  verifyDelivery
 };

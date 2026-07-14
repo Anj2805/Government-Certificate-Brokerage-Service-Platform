@@ -60,10 +60,58 @@ const getDashboardStats = asyncHandler(async (req, res) => {
   });
 });
 
+const getProfile = asyncHandler(async (req, res) => {
+  const profile = await agentService.getProfile(req.user.id);
+  return ApiResponse.success(res, {
+    message: 'Profile fetched successfully',
+    data: { profile },
+  });
+});
+
+const updateProfile = asyncHandler(async (req, res) => {
+  const profile = await agentService.updateProfile(req.user.id, req.body);
+  return ApiResponse.success(res, {
+    message: 'Profile updated successfully',
+    data: { profile },
+  });
+});
+
+const uploadProfilePhoto = asyncHandler(async (req, res) => {
+  const profile = await agentService.uploadProfilePhoto(req.user.id, req.file);
+  return ApiResponse.success(res, {
+    message: 'Profile photo uploaded successfully',
+    data: { profile },
+  });
+});
+
+const removeProfilePhoto = asyncHandler(async (req, res) => {
+  const profile = await agentService.removeProfilePhoto(req.user.id);
+  return ApiResponse.success(res, {
+    message: 'Profile photo removed successfully',
+    data: { profile },
+  });
+});
+
+const getProfilePhoto = asyncHandler(async (req, res) => {
+  const downloadStrategy = await agentService.getProfilePhotoStrategy(req.user.id);
+  if (!downloadStrategy) {
+    return res.status(httpStatus.NOT_FOUND).send('Profile photo not found');
+  }
+  if (downloadStrategy.type === 'redirect') {
+    return res.redirect(downloadStrategy.url);
+  }
+  return res.sendFile(downloadStrategy.physicalPath);
+});
+
 module.exports = {
   getDashboardStats,
   getRequestDetails,
   listAssignedRequests,
   updateProgress,
   uploadAdditionalDocument,
+  getProfile,
+  updateProfile,
+  uploadProfilePhoto,
+  removeProfilePhoto,
+  getProfilePhoto,
 };

@@ -6,6 +6,7 @@ import { brandAssets } from '../../config/brandAssets';
 import { PATHS } from '../../config/paths';
 import { useAuth } from '../../hooks/useAuth';
 import { authApi } from '../../api/authApi';
+import toast from 'react-hot-toast';
 
 function InputIcon({ type }) {
   return (
@@ -56,7 +57,9 @@ function IconInput({ icon, children, className = '' }) {
     setErrorMessage('');
 
     if (values.password !== values.confirmPassword) {
-      setErrorMessage('Passwords do not match');
+      const msg = 'Passwords do not match';
+      toast.error(msg);
+      setErrorMessage(msg);
       return;
     }
 
@@ -70,9 +73,17 @@ function IconInput({ icon, children, className = '' }) {
       role: selectedRole,
     };
 
+    if (selectedRole === 'citizen') {
+      payload.address = values.address;
+      payload.city = values.city;
+      payload.state = values.state;
+      payload.postalCode = values.postalCode;
+    }
+
     try {
       if (selectedRole === 'agent') {
         await authApi.register(payload);
+        toast.success('Agent application submitted successfully.');
         setSuccessMessage(
           <span>
             Your agent application was submitted. Verify your email and wait for administrator approval before accessing agent services.{' '}
@@ -83,16 +94,18 @@ function IconInput({ icon, children, className = '' }) {
         );
       } else {
         await registerUser(payload);
+        toast.success('Successfully registered.');
         navigate(PATHS.CITIZEN_DASHBOARD, { replace: true });
       }
     } catch (err) {
       const apiResponse = err.response?.data;
+      let msg = apiResponse?.message || err?.message || 'Registration failed. Please try again.';
       if (apiResponse?.details && Array.isArray(apiResponse.details) && apiResponse.details.length > 0) {
         const firstError = apiResponse.details[0];
-        setErrorMessage(`${firstError.field}: ${firstError.message}`);
-      } else {
-        setErrorMessage(apiResponse?.message || 'Registration failed. Please try again.');
+        msg = `${firstError.field}: ${firstError.message}`;
       }
+      toast.error(msg);
+      setErrorMessage(msg);
     }
   };
 
@@ -263,6 +276,50 @@ function IconInput({ icon, children, className = '' }) {
                   </IconInput>
                 </FormField>
               </div>
+
+              {selectedRole === 'citizen' && (
+                <div className="space-y-4 pt-2 border-t border-[#e2e8f0]">
+                  <h3 className="text-[14px] font-bold text-[#0f294a]">Address Details</h3>
+                  <FormField label="Street Address">
+                    <input
+                      type="text"
+                      placeholder="House No, Street Name, Area"
+                      className="mt-2 h-12 w-full rounded-lg border border-[#cbd5e1] bg-white px-3 text-[14px] font-medium text-[#111827] outline-none focus:border-[#13448a] focus:ring-1 focus:ring-[#13448a] transition-all"
+                      {...register('address')}
+                      required={selectedRole === 'citizen'}
+                    />
+                  </FormField>
+                  <div className="grid gap-4 sm:grid-cols-3">
+                    <FormField label="City">
+                      <input
+                        type="text"
+                        placeholder="City"
+                        className="mt-2 h-12 w-full rounded-lg border border-[#cbd5e1] bg-white px-3 text-[14px] font-medium text-[#111827] outline-none focus:border-[#13448a] focus:ring-1 focus:ring-[#13448a] transition-all"
+                        {...register('city')}
+                        required={selectedRole === 'citizen'}
+                      />
+                    </FormField>
+                    <FormField label="State">
+                      <input
+                        type="text"
+                        placeholder="State"
+                        className="mt-2 h-12 w-full rounded-lg border border-[#cbd5e1] bg-white px-3 text-[14px] font-medium text-[#111827] outline-none focus:border-[#13448a] focus:ring-1 focus:ring-[#13448a] transition-all"
+                        {...register('state')}
+                        required={selectedRole === 'citizen'}
+                      />
+                    </FormField>
+                    <FormField label="Postal Code">
+                      <input
+                        type="text"
+                        placeholder="PIN Code"
+                        className="mt-2 h-12 w-full rounded-lg border border-[#cbd5e1] bg-white px-3 text-[14px] font-medium text-[#111827] outline-none focus:border-[#13448a] focus:ring-1 focus:ring-[#13448a] transition-all"
+                        {...register('postalCode')}
+                        required={selectedRole === 'citizen'}
+                      />
+                    </FormField>
+                  </div>
+                </div>
+              )}
 
               <label className="flex items-start gap-3 text-[13px] font-medium leading-relaxed text-[#6b7280] cursor-pointer text-left">
                 <input 

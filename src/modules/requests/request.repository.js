@@ -5,13 +5,15 @@ const create = (payload) => Request.create(payload);
 
 const findById = (id) => Request.findById(id);
 
+const findOne = (query) => Request.findOne(query);
+
 const findPaginated = async ({ query, page, limit }) => {
   const skip = (page - 1) * limit;
 
   const [items, total] = await Promise.all([
     Request.find(query)
       .populate('service', 'name category')
-      .populate('citizen', 'firstName lastName email role')
+      .populate('citizen', 'firstName lastName email role phone address city state postalCode')
       .populate('assignedAgent', 'firstName lastName email role')
       .sort({ createdAt: -1 })
       .skip(skip)
@@ -100,6 +102,7 @@ const getSummary = async (citizenId) => {
 module.exports = {
   create,
   findById,
+  findOne,
   findPaginated,
   save,
   getSummary,

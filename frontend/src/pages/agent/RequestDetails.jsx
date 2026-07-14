@@ -2,7 +2,9 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { PATHS } from '../../config/paths';
 import { agentApi } from '../../api/agentApi';
+import { requestApi } from '../../api/requestApi';
 import { getUploadUrl } from '../../api/httpClient';
+import toast from 'react-hot-toast';
 
 export default function AgentRequestDetails() {
   const { id } = useParams();
@@ -17,12 +19,17 @@ export default function AgentRequestDetails() {
   // Modal controls
   const [showStatusModal, setShowStatusModal] = useState(false);
   const [showUploadModal, setShowUploadModal] = useState(false);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [showVerifyDeliveryModal, setShowVerifyDeliveryModal] = useState(false);
 
   // Form selections
   const [selectedStatus, setSelectedStatus] = useState("");
+  const [verificationResult, setVerificationResult] = useState("PASSED");
+  const [codCollected, setCodCollected] = useState(false);
   const [agentNote, setAgentNote] = useState("");
   const [uploadedDocName, setUploadedDocName] = useState("");
   const [selectedDocType, setSelectedDocType] = useState("Verification Report");
+  const [paymentReference, setPaymentReference] = useState("");
 
   const fetchRequestDetails = async () => {
     setIsLoading(true);
@@ -32,7 +39,8 @@ export default function AgentRequestDetails() {
       setRequest(data);
       setSelectedStatus(data.status);
     } catch (err) {
-      console.error(err);
+      toast.error(err?.response?.data?.message || 'An error occurred');
+        console.error(err);
       setIsError(true);
     } finally {
       setIsLoading(false);
@@ -52,19 +60,19 @@ export default function AgentRequestDetails() {
         status: selectedStatus,
         reason: agentNote
       });
-      alert(`Successfully updated request status.`);
+      toast.success('Successfully updated request status.');
       setShowStatusModal(false);
       setAgentNote("");
       fetchRequestDetails();
     } catch (err) {
-      alert(err?.response?.data?.message || 'Failed to update status');
+      toast.error(err?.response?.data?.message || 'Failed to update status');
     }
   };
 
   const handleUploadDocSubmit = async (e) => {
     e.preventDefault();
     if (!uploadedDocName) {
-      alert("Please choose a verification document file and enter a title.");
+      toast.error("Please choose a verification document file and enter a title.");
       return;
     }
 
@@ -77,14 +85,65 @@ export default function AgentRequestDetails() {
       formData.append('documentType', selectedDocType);
 
       await agentApi.uploadAdditionalDocument(id, formData);
-      alert(`Successfully uploaded "${uploadedDocName}"`);
+      toast.success(`Successfully uploaded "${uploadedDocName}"`);
       setShowUploadModal(false);
       setUploadedDocName("");
       fetchRequestDetails();
     } catch (err) {
-      alert(err?.response?.data?.message || 'Failed to upload document');
+      toast.error(err?.response?.data?.message || 'Failed to upload document');
     } finally {
       setUploadingDoc(false);
+    }
+  };
+
+  const handleRecordPaymentSubmit = async (e) => {
+    e.preventDefault();
+    if (!paymentReference.trim()) {
+      toast.error('Please enter a payment reference number.');
+      return;
+    }
+    try {
+      await requestApi.recordPayment(id, {
+        paymentReference,
+        notes: agentNote
+      });
+      toast.success('Offline payment recorded successfully.');
+      setShowPaymentModal(false);
+      setPaymentReference("");
+      setAgentNote("");
+      fetchRequestDetails();
+    } catch (err) {
+      toast.error(err?.response?.data?.message || 'Failed to record payment');
+    }
+  };
+
+  const handleDispatchDelivery = async () => {
+    try {
+      await agentApi.dispatchDelivery(id);
+      toast.success('Request dispatched for delivery.');
+      fetchRequestDetails();
+    } catch (err) {
+      toast.error(err?.response?.data?.message || 'Failed to dispatch delivery');
+    }
+  };
+
+  const handleVerifyDeliverySubmit = async (e) => {
+    e.preventDefault();
+    if (verificationResult === 'PASSED' && request.paymentStatus === 'COD_DUE' && !codCollected) {
+      toast.error('You must collect Cash on Delivery before completing the delivery.');
+      return;
+    }
+    
+    try {
+      await agentApi.verifyDelivery(id, {
+        verificationResult,
+        codCollected: verificationResult === 'PASSED' ? codCollected : false
+      });
+      toast.success('Delivery verification completed.');
+      setShowVerifyDeliveryModal(false);
+      fetchRequestDetails();
+    } catch (err) {
+      toast.error(err?.response?.data?.message || 'Failed to verify delivery');
     }
   };
 
@@ -134,8 +193,12 @@ export default function AgentRequestDetails() {
   }
 
   const getTimelineStepStatus = (stepIndex) => {
-    const statusOrder = ['draft', 'submitted', 'assigned', 'in_progress', 'completed'];
-    const currentStatusIndex = statusOrder.indexOf(request.status);
+    const statusOrder = ['draft', 'submitted', 'assigned', 'under_review', 'approved', 'completed'];
+    
+    let effectiveStatus = request.status;
+    if (effectiveStatus === 'correction_required') effectiveStatus = 'under_review';
+    
+    const currentStatusIndex = statusOrder.indexOf(effectiveStatus);
     
     if (request.status === 'cancelled' || request.status === 'rejected') {
       return stepIndex === 0 ? 'completed' : 'pending';
@@ -149,7 +212,7 @@ export default function AgentRequestDetails() {
   const getStatusBadgeClass = (status) => {
     switch (status) {
       case 'completed': return 'bg-emerald-50 text-emerald-700 border-emerald-200';
-      case 'in_progress': return 'bg-amber-50 text-amber-700 border-amber-205';
+      case 'under_review': return 'bg-amber-50 text-amber-700 border-amber-205';
       case 'assigned': return 'bg-indigo-50 text-indigo-700 border-indigo-200';
       case 'submitted': return 'bg-slate-50 text-slate-700 border-slate-200';
       case 'draft': return 'bg-gray-50 text-gray-705 border-gray-200';
@@ -160,7 +223,7 @@ export default function AgentRequestDetails() {
   };
 
   const getStatusLabel = (status) => {
-    if (status === 'documents_required') return 'Docs Required';
+    if (status === 'correction_required') return 'Correction Required';
     return status.charAt(0).toUpperCase() + status.slice(1).replace('_', ' ');
   };
 
@@ -194,6 +257,30 @@ export default function AgentRequestDetails() {
 
           {/* Action CTAs */}
           <div className="flex items-center gap-3">
+            {request.deliveryStatus === 'READY_FOR_DISPATCH' && (
+              <button
+                onClick={handleDispatchDelivery}
+                className="h-10 px-4 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-[13px] font-bold text-white transition-colors flex items-center gap-2 shadow-sm"
+              >
+                Dispatch Delivery
+              </button>
+            )}
+            {(request.deliveryStatus === 'DISPATCHED' || request.deliveryStatus === 'OUT_FOR_DELIVERY') && (
+              <button
+                onClick={() => setShowVerifyDeliveryModal(true)}
+                className="h-10 px-4 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-[13px] font-bold text-white transition-colors flex items-center gap-2 shadow-sm"
+              >
+                Verify & Deliver
+              </button>
+            )}
+            {request.paymentStatus === 'DUE' && request.paymentMethod !== 'CASH_ON_DELIVERY' && (
+              <button
+                onClick={() => setShowPaymentModal(true)}
+                className="h-10 px-4 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-[13px] font-bold text-white transition-colors flex items-center gap-2 shadow-sm"
+              >
+                Record Payment
+              </button>
+            )}
             <button
               onClick={() => setShowStatusModal(true)}
               className="h-10 px-4 rounded-lg bg-[#13448a] hover:bg-[#0c316a] text-[13px] font-bold text-white transition-colors flex items-center gap-2 shadow-sm"
@@ -216,9 +303,10 @@ export default function AgentRequestDetails() {
             <div className="absolute left-0 top-1/2 h-[3px] bg-[#13448a] -translate-y-1/2 z-0 transition-all duration-500" style={{
               width: request.status === "cancelled" || request.status === "rejected" ? "0%" :
                      request.status === "draft" ? "0%" :
-                     request.status === "submitted" ? "25%" :
-                     request.status === "assigned" ? "50%" :
-                     request.status === "in_progress" ? "75%" : "100%"
+                     request.status === "submitted" ? "20%" :
+                     request.status === "assigned" ? "40%" :
+                     request.status === "under_review" || request.status === "correction_required" ? "60%" :
+                     request.status === "approved" ? "80%" : "100%"
             }}></div>
 
             <div className="flex flex-col items-center z-10 bg-white px-2">
@@ -252,14 +340,23 @@ export default function AgentRequestDetails() {
               }`}>
                 <span className="text-[14px] font-bold">4</span>
               </div>
-              <span className={`text-[11px] font-extrabold mt-2 tracking-wider uppercase ${getTimelineStepStatus(3) !== 'pending' ? 'text-[#13448a]' : 'text-gray-400'}`}>In Progress</span>
+              <span className={`text-[11px] font-extrabold mt-2 tracking-wider uppercase ${getTimelineStepStatus(3) !== 'pending' ? 'text-[#13448a]' : 'text-gray-400'}`}>Under Review</span>
+            </div>
+
+            <div className="flex flex-col items-center z-10 bg-white px-2">
+              <div style={{ width: '36px', height: '36px' }} className={`rounded-full flex items-center justify-center border-2 ${
+                getTimelineStepStatus(4) === 'completed' || getTimelineStepStatus(4) === 'active' ? "bg-[#13448a] border-[#13448a] text-white" : "border-gray-200 bg-white text-gray-400"
+              }`}>
+                <span className="text-[14px] font-bold">5</span>
+              </div>
+              <span className={`text-[11px] font-extrabold mt-2 tracking-wider uppercase ${getTimelineStepStatus(4) !== 'pending' ? 'text-[#13448a]' : 'text-gray-400'}`}>Approved</span>
             </div>
 
             <div className="flex flex-col items-center z-10 bg-white px-2">
               <div style={{ width: '36px', height: '36px' }} className={`rounded-full flex items-center justify-center border-2 text-[14px] font-extrabold ${
                 request.status === 'completed' ? "bg-emerald-500 border-emerald-500 text-white" : "border-gray-200 bg-white text-gray-400"
               }`}>
-                {request.status === 'completed' ? "✓" : "5"}
+                {request.status === 'completed' ? "✓" : "6"}
               </div>
               <span className={`text-[11px] font-extrabold mt-2 tracking-wider uppercase ${request.status === 'completed' ? 'text-emerald-600' : 'text-gray-400'}`}>Completed</span>
             </div>
@@ -305,6 +402,187 @@ export default function AgentRequestDetails() {
               </div>
             </div>
 
+            {/* Delivery Address Block */}
+            {request.deliveryAddress && request.deliveryAddress.houseNumber && (
+              <div className="bg-white rounded-2xl border border-[#e2e8f0] shadow-sm p-6 space-y-6">
+                <div className="flex items-center justify-between pb-4.5 border-b border-gray-100">
+                  <h2 className="text-[17px] font-extrabold text-[#0f294a] flex items-center gap-2">
+                    <svg style={{ width: '18px', height: '18px' }} fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                      <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+                      <circle cx="12" cy="10" r="3"></circle>
+                    </svg>
+                    Delivery Information
+                  </h2>
+                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded text-[11px] font-extrabold uppercase tracking-wider ${
+                    request.deliveryStatus === 'DELIVERED' ? 'bg-emerald-50 text-emerald-700' :
+                    request.deliveryStatus === 'DISPATCHED' || request.deliveryStatus === 'OUT_FOR_DELIVERY' ? 'bg-blue-50 text-blue-700' :
+                    request.deliveryStatus === 'READY_FOR_DISPATCH' ? 'bg-amber-50 text-amber-700' :
+                    request.deliveryStatus === 'FAILED' ? 'bg-red-50 text-red-700' : 'bg-gray-100 text-gray-500'
+                  }`}>
+                    {request.deliveryStatus ? request.deliveryStatus.replace(/_/g, ' ') : 'Pending'}
+                  </span>
+                </div>
+
+                {request.deliveryStatus && request.deliveryStatus !== 'PENDING' && request.deliveryStatus !== 'NOT_REQUIRED' && (
+                  <div className="mb-6 pt-2 pb-2">
+                    <div className="flex items-center justify-between relative max-w-[400px] mx-auto">
+                      <div className="absolute left-0 right-0 top-1/2 h-[3px] bg-gray-100 -translate-y-1/2 z-0"></div>
+                      <div className="absolute left-0 top-1/2 h-[3px] bg-blue-500 -translate-y-1/2 z-0 transition-all duration-500" style={{
+                        width: request.deliveryStatus === "READY_FOR_DISPATCH" ? "0%" :
+                               request.deliveryStatus === "DISPATCHED" ? "50%" :
+                               request.deliveryStatus === "OUT_FOR_DELIVERY" ? "50%" :
+                               request.deliveryStatus === "DELIVERED" ? "100%" : "0%"
+                      }}></div>
+
+                      <div className="flex flex-col items-center z-10 bg-white px-2">
+                        <div style={{ width: '24px', height: '24px' }} className={`rounded-full flex items-center justify-center border-2 ${
+                          ['READY_FOR_DISPATCH', 'DISPATCHED', 'OUT_FOR_DELIVERY', 'DELIVERED'].includes(request.deliveryStatus) ? "bg-blue-500 border-blue-500 text-white" : "border-gray-200 bg-white"
+                        }`}>
+                          {['READY_FOR_DISPATCH', 'DISPATCHED', 'OUT_FOR_DELIVERY', 'DELIVERED'].includes(request.deliveryStatus) && (
+                            <svg style={{ width: '12px', height: '12px' }} fill="none" stroke="currentColor" strokeWidth="3" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12" /></svg>
+                          )}
+                        </div>
+                        <span className="text-[10px] font-extrabold text-blue-600 mt-2 tracking-wider uppercase text-center">Ready</span>
+                      </div>
+
+                      <div className="flex flex-col items-center z-10 bg-white px-2">
+                        <div style={{ width: '24px', height: '24px' }} className={`rounded-full flex items-center justify-center border-2 ${
+                          ['DISPATCHED', 'OUT_FOR_DELIVERY', 'DELIVERED'].includes(request.deliveryStatus) ? "bg-blue-500 border-blue-500 text-white" : "border-gray-200 bg-white"
+                        }`}>
+                           {['DISPATCHED', 'OUT_FOR_DELIVERY', 'DELIVERED'].includes(request.deliveryStatus) && (
+                            <svg style={{ width: '12px', height: '12px' }} fill="none" stroke="currentColor" strokeWidth="3" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12" /></svg>
+                          )}
+                        </div>
+                        <span className={`text-[10px] font-extrabold mt-2 tracking-wider uppercase text-center ${['DISPATCHED', 'OUT_FOR_DELIVERY', 'DELIVERED'].includes(request.deliveryStatus) ? 'text-blue-600' : 'text-gray-400'}`}>Dispatched</span>
+                      </div>
+
+                      <div className="flex flex-col items-center z-10 bg-white px-2">
+                        <div style={{ width: '24px', height: '24px' }} className={`rounded-full flex items-center justify-center border-2 ${
+                          request.deliveryStatus === 'DELIVERED' ? "bg-emerald-500 border-emerald-500 text-white" : "border-gray-200 bg-white"
+                        }`}>
+                           {request.deliveryStatus === 'DELIVERED' && (
+                            <svg style={{ width: '12px', height: '12px' }} fill="none" stroke="currentColor" strokeWidth="3" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12" /></svg>
+                          )}
+                        </div>
+                        <span className={`text-[10px] font-extrabold mt-2 tracking-wider uppercase text-center ${request.deliveryStatus === 'DELIVERED' ? 'text-emerald-600' : 'text-gray-400'}`}>Delivered</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                <div className="grid gap-6 sm:grid-cols-2">
+                  <div className="sm:col-span-2">
+                    <span className="text-[11.5px] font-bold text-gray-400 uppercase tracking-wider block">Recipient</span>
+                    <span className="text-[14.5px] font-extrabold text-gray-800 mt-1 block">
+                      {request.deliveryAddress.recipientName} ({request.deliveryAddress.mobileNumber})
+                    </span>
+                  </div>
+                  <div className="sm:col-span-2">
+                    <span className="text-[11.5px] font-bold text-gray-400 uppercase tracking-wider block">Delivery Address</span>
+                    <span className="text-[14.5px] font-semibold text-gray-700 mt-1 block leading-relaxed">
+                      {request.deliveryAddress.houseNumber}, {request.deliveryAddress.street}
+                      <br/>
+                      {request.deliveryAddress.landmark && <>{request.deliveryAddress.landmark}<br/></>}
+                      {request.deliveryAddress.village}, {request.deliveryAddress.district}
+                      <br/>
+                      {request.deliveryAddress.state} - {request.deliveryAddress.pinCode}
+                    </span>
+                  </div>
+                  {request.trackingId && (
+                    <div className="sm:col-span-2 bg-blue-50 border border-blue-100 rounded-xl p-4 flex items-center justify-between">
+                      <div>
+                        <span className="text-[11.5px] font-bold text-blue-600 uppercase tracking-wider block">Tracking ID</span>
+                        <span className="text-[16px] font-extrabold text-blue-900 mt-1 block tracking-wider">
+                          {request.trackingId}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Pending Documents Review Block */}
+            {(request.documents || []).filter(d => d.status === 'pending').length > 0 && (
+              <div className="bg-amber-50 rounded-2xl border border-amber-200 shadow-sm p-6 space-y-6">
+                <div className="pb-4.5 border-b border-amber-200/50 flex items-center justify-between">
+                  <h2 className="text-[17px] font-extrabold text-amber-900 flex items-center gap-2">
+                    Action Required: Review Re-uploads
+                  </h2>
+                </div>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  {(request.documents || []).filter(d => d.status === 'pending').map((doc, idx) => (
+                    <div key={idx} className="border border-amber-200 bg-white rounded-xl p-4 flex flex-col gap-3 shadow-sm hover:border-amber-400 transition-colors">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="h-10 w-10 rounded-lg bg-amber-100 flex items-center justify-center text-amber-700 shrink-0">
+                          <svg style={{ width: '18px', height: '18px' }} fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                          </svg>
+                        </div>
+                        <div className="space-y-0.5 min-w-0 flex-1">
+                          <span className="text-sm font-bold text-gray-900 block truncate" title={doc.originalName}>{doc.originalName}</span>
+                          <span className="text-[11px] text-gray-400 font-bold block truncate tracking-wide">
+                            {doc.documentType?.replace('_', ' ').toUpperCase() || "Proof"} • {new Date(doc.createdAt).toLocaleDateString()}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 pt-2 border-t border-amber-100 mt-1">
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            try {
+                              const res = await agentApi.downloadDocument(doc._id);
+                              window.open(res.data.data.url, '_blank');
+                            } catch (err) {
+                              toast.error("Failed to load document");
+                            }
+                          }}
+                          className="flex-1 h-8 bg-amber-100 hover:bg-amber-200 text-[12px] font-bold text-amber-800 rounded-lg transition-colors flex items-center justify-center gap-1.5"
+                        >
+                          View
+                        </button>
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            try {
+                              await agentApi.acceptDocument(doc._id);
+                              toast.success("Document verified!");
+                              fetchRequestDetails();
+                            } catch (e) {
+                              toast.error("Failed to accept document");
+                            }
+                          }}
+                          className="flex-1 h-8 bg-emerald-100 hover:bg-emerald-200 text-[12px] font-bold text-emerald-800 rounded-lg transition-colors flex items-center justify-center gap-1.5"
+                        >
+                          Accept
+                        </button>
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            try {
+                              const reason = "Document did not pass verification";
+                              await agentApi.rejectDocument(doc._id, reason);
+                              if (request.status !== 'correction_required') {
+                                await agentApi.requestCorrection(request._id, `Document ${doc.originalName} was rejected. Please upload a clear and valid copy.`);
+                              }
+                              toast.success("Document rejected");
+                              fetchRequestDetails();
+                            } catch (e) {
+                              toast.error(e?.response?.data?.message || "Failed to reject document");
+                            }
+                          }}
+                          className="flex-1 h-8 bg-red-100 hover:bg-red-200 text-[12px] font-bold text-red-800 rounded-lg transition-colors flex items-center justify-center gap-1.5"
+                        >
+                          Reject
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <div className="bg-white rounded-2xl border border-[#e2e8f0] shadow-sm p-6 space-y-6">
               <div className="pb-4.5 border-b border-gray-100 flex items-center justify-between">
                 <h2 className="text-[17px] font-extrabold text-[#0f294a] flex items-center gap-2">
@@ -314,33 +592,78 @@ export default function AgentRequestDetails() {
               </div>
 
               <div className="grid gap-4 sm:grid-cols-2">
-                {(request.documents || []).map((doc, idx) => (
-                  <div key={idx} className="border border-[#e2e8f0] rounded-xl p-4 flex items-center justify-between gap-3 shadow-sm hover:border-[#13448a] transition-colors">
-                    <div className="flex items-center gap-3">
-                      <div className="h-10 w-10 rounded-lg bg-gray-50 flex items-center justify-center text-[#13448a] border border-gray-100 shrink-0">
-                        📄
+                {(request.documents || []).filter(d => d.status !== 'pending').map((doc, idx) => (
+                  <div key={idx} className="border border-slate-200 rounded-xl p-4 flex items-center justify-between gap-3 shadow-sm hover:border-blue-600 transition-colors">
+                    <div className="flex items-center gap-3 min-w-0 flex-1">
+                      <div className="h-10 w-10 rounded-lg bg-slate-50 flex items-center justify-center text-blue-700 border border-slate-100 shrink-0">
+                        <svg style={{ width: '18px', height: '18px' }} fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                        </svg>
                       </div>
-                      <div className="space-y-0.5">
-                        <span className="text-[13px] font-bold text-gray-800 block truncate max-w-[150px]" title={doc.originalName}>{doc.originalName}</span>
-                        <span className="text-[11px] text-gray-400 font-bold block">
+                      <div className="space-y-0.5 min-w-0 flex-1">
+                        <span className="text-sm font-bold text-gray-900 block truncate" title={doc.originalName}>{doc.originalName}</span>
+                        <span className="text-[11px] text-gray-400 font-bold block truncate tracking-wide">
                           {doc.documentType?.replace('_', ' ').toUpperCase() || "Proof"} • {new Date(doc.createdAt).toLocaleDateString()}
                         </span>
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-2">
-                      <a
-                        href={doc.fileUrl || getUploadUrl(doc.filename)}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="h-8 w-8 rounded-lg hover:bg-gray-50 text-[#13448a] flex items-center justify-center font-bold"
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
+                        doc.status === "verified" 
+                          ? "bg-emerald-50 text-emerald-700 border border-emerald-100" 
+                          : doc.status === "rejected"
+                            ? "bg-red-50 text-red-700 border border-red-100"
+                            : "bg-amber-50 text-amber-700 border border-amber-100"
+                      }`}>
+                        {doc.status}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          try {
+                            const res = await agentApi.downloadDocument(doc._id);
+                            window.open(res.data.data.url, '_blank');
+                          } catch (err) {
+                            if (err.response?.status === 404) {
+                              toast.error("Document file not found. Automatically requesting re-upload from citizen.");
+                              try {
+                                await agentApi.rejectDocument(doc._id, 'Document file not found on server. Please re-upload.');
+                                await agentApi.requestCorrection(request._id, `Document ${doc.originalName} is missing and needs to be re-uploaded.`);
+                                fetchRequestDetails();
+                              } catch (e) {
+                                toast.error(e?.response?.data?.message || 'An error occurred');
+        console.error(e);
+                              }
+                            } else {
+                              toast.error("Failed to load document");
+                            }
+                          }
+                        }}
+                        className="h-8 w-8 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 flex items-center justify-center transition-colors"
                       >
-                        DL
-                      </a>
+                        <svg style={{ width: '16px', height: '16px' }} fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                          <polyline points="7 10 12 15 17 10" />
+                        </svg>
+                      </button>
                     </div>
                   </div>
                 ))}
-              </div>
+              <button
+                type="button"
+                onClick={() => setShowUploadModal(true)}
+                className="border-2 border-dashed border-gray-200 hover:border-[#13448a] rounded-xl p-4 flex flex-col items-center justify-center text-center cursor-pointer transition-colors min-h-[72px] bg-gray-50"
+              >
+                <span className="h-7 w-7 rounded-full bg-white flex items-center justify-center text-[#13448a] border border-gray-100 shadow-sm">
+                  +
+                </span>
+                <span className="text-[12.5px] font-bold text-gray-700 mt-2 block">
+                  Upload Additional Document
+                </span>
+                <span className="text-[10px] font-bold text-gray-400 block mt-0.5">Verification Report, Agent Notes, etc.</span>
+              </button>
+            </div>
             </div>
           </div>
 
@@ -360,6 +683,15 @@ export default function AgentRequestDetails() {
                 <div>
                   <span className="text-[10px] text-gray-400 block uppercase">Phone Number</span>
                   <span className="text-gray-850 font-bold block mt-0.5">{request.citizen?.phone || 'Not provided'}</span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-gray-400 block uppercase">Address</span>
+                  <div className="mt-0.5 text-gray-850 font-bold space-y-0.5 whitespace-pre-wrap">
+                    <p>{request.citizen?.address || 'No address provided.'}</p>
+                    {(request.citizen?.city || request.citizen?.state || request.citizen?.postalCode) && (
+                      <p>{[request.citizen?.city, request.citizen?.state, request.citizen?.postalCode].filter(Boolean).join(', ')}</p>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
@@ -409,8 +741,9 @@ export default function AgentRequestDetails() {
                   className="w-full h-11 px-3.5 rounded-lg border border-gray-200 text-gray-700 focus:ring-2 focus:ring-[#13448a] focus:border-[#13448a]"
                 >
                   <option value="assigned">Assigned</option>
-                  <option value="in_progress">In Progress</option>
-                  <option value="documents_required">Documents Required</option>
+                  <option value="under_review">In Progress (Under Review)</option>
+                  <option value="correction_required">Documents Required (Correction)</option>
+                  <option value="approved">Approved</option>
                   <option value="completed">Completed</option>
                   <option value="rejected">Rejected</option>
                 </select>
@@ -485,6 +818,7 @@ export default function AgentRequestDetails() {
                   <option value="Verification Report">Verification Report</option>
                   <option value="Agent Notes">Agent Notes</option>
                   <option value="Additional Proof">Additional Proof</option>
+                  <option value="Final Certificate">Final Certificate</option>
                 </select>
               </div>
 
@@ -502,6 +836,123 @@ export default function AgentRequestDetails() {
                   className={`flex-1 h-11 bg-[#13448a] hover:bg-[#0c316a] text-[13px] font-bold text-white rounded-lg shadow-sm transition-colors ${uploadingDoc ? 'opacity-50' : ''}`}
                 >
                   {uploadingDoc ? "Uploading..." : "Upload Document"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {showPaymentModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-sm w-full p-6 space-y-6 shadow-xl border border-gray-100">
+            <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+              <h3 className="text-[17px] font-extrabold text-[#0f294a]">Record Offline Payment</h3>
+              <button onClick={() => setShowPaymentModal(false)} className="text-gray-400 hover:text-red-500 font-bold p-1">✕</button>
+            </div>
+            <form onSubmit={handleRecordPaymentSubmit} className="space-y-4">
+              <div>
+                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Amount Due</label>
+                <div className="text-[15px] font-extrabold text-gray-800">
+                  ₹ {request.serviceSnapshot?.serviceCharge || request.service?.serviceCharge || 0}
+                </div>
+              </div>
+              <div>
+                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Receipt / Reference Number</label>
+                <input
+                  type="text"
+                  value={paymentReference}
+                  onChange={(e) => setPaymentReference(e.target.value)}
+                  className="w-full h-11 px-3 rounded-lg border border-[#e2e8f0] focus:ring-2 focus:ring-[#13448a] focus:border-[#13448a] text-[13.5px] font-semibold transition-all outline-none"
+                  placeholder="e.g. REC-10293"
+                  required
+                />
+              </div>
+              <div>
+                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Internal Note (Optional)</label>
+                <textarea
+                  value={agentNote}
+                  onChange={(e) => setAgentNote(e.target.value)}
+                  className="w-full p-3 rounded-lg border border-[#e2e8f0] focus:ring-2 focus:ring-[#13448a] focus:border-[#13448a] text-[13.5px] font-semibold transition-all outline-none resize-none"
+                  rows="2"
+                  placeholder="E.g. Paid in cash at counter 3..."
+                />
+              </div>
+              <div className="pt-2">
+                <button
+                  type="submit"
+                  className="w-full h-11 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-[13px] font-bold text-white transition-colors"
+                >
+                  Record Payment
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Verify Delivery Modal */}
+      {showVerifyDeliveryModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-sm w-full p-6 space-y-6 shadow-xl border border-gray-100">
+            <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+              <h3 className="text-[17px] font-extrabold text-[#0f294a]">Verify Delivery</h3>
+              <button onClick={() => setShowVerifyDeliveryModal(false)} className="text-gray-400 hover:text-red-500 font-bold p-1">✕</button>
+            </div>
+            
+            {request.paymentStatus === 'COD_DUE' && (
+              <div className="flex gap-2.5 rounded-xl bg-amber-50 p-4 border border-amber-200 text-[12.5px] font-semibold text-amber-800 leading-normal">
+                <svg style={{ width: '18px', height: '18px' }} className="text-amber-700 shrink-0 mt-0.5" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                  <circle cx="12" cy="12" r="10" />
+                  <line x1="12" y1="16" x2="12" y2="12" />
+                  <line x1="12" y1="8" x2="12.01" y2="8" />
+                </svg>
+                Collect COD Amount: ₹{request.serviceSnapshot?.serviceCharge || 0}
+              </div>
+            )}
+            
+            <form onSubmit={handleVerifyDeliverySubmit} className="space-y-4">
+              <div>
+                <label className="block text-[12px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">Verification Result</label>
+                <select
+                  value={verificationResult}
+                  onChange={(e) => setVerificationResult(e.target.value)}
+                  className="w-full p-3 rounded-lg border border-gray-200 text-gray-700 focus:ring-2 focus:ring-[#13448a] outline-none"
+                >
+                  <option value="PASSED">Passed (Recipient Verified)</option>
+                  <option value="RECIPIENT_NOT_PRESENT">Recipient Not Present</option>
+                  <option value="FAILED">Verification Failed / Rejected</option>
+                </select>
+              </div>
+
+              {verificationResult === 'PASSED' && request.paymentStatus === 'COD_DUE' && (
+                <div className="flex items-center gap-3 bg-gray-50 p-4 rounded-xl border border-gray-200">
+                  <input
+                    type="checkbox"
+                    id="codCollected"
+                    checked={codCollected}
+                    onChange={(e) => setCodCollected(e.target.checked)}
+                    className="w-4 h-4 text-emerald-600 bg-white border-gray-300 rounded focus:ring-emerald-500"
+                  />
+                  <label htmlFor="codCollected" className="text-[13px] font-bold text-gray-700 cursor-pointer">
+                    I confirm that the COD amount (₹{request.serviceSnapshot?.serviceCharge || 0}) was collected.
+                  </label>
+                </div>
+              )}
+
+              <div className="pt-2 flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowVerifyDeliveryModal(false)}
+                  className="flex-1 h-11 border border-gray-200 hover:bg-gray-50 text-[13px] font-bold text-gray-700 rounded-lg transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 h-11 bg-[#13448a] hover:bg-[#0c316a] text-[13px] font-bold text-white rounded-lg shadow-sm transition-colors"
+                >
+                  Confirm Delivery
                 </button>
               </div>
             </form>

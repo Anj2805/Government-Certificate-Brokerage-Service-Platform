@@ -2,8 +2,12 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { notificationApi } from '../../api/notificationApi';
 import { PATHS } from '../../config/paths';
+import { ROLES } from '../../config/roles';
+import { useAuth } from '../../hooks/useAuth';
+import toast from 'react-hot-toast';
 
-export default function CitizenNotifications() {
+export default function Notifications() {
+  const { role } = useAuth();
   const [notifications, setNotifications] = useState([]);
   const [pagination, setPagination] = useState({ page: 1, totalPages: 1 });
   const [loading, setLoading] = useState(true);
@@ -15,11 +19,12 @@ export default function CitizenNotifications() {
       setLoading(true);
       const res = await notificationApi.listNotifications({ page, limit: 10 });
       if (res.success) {
-        setNotifications(res.data.notifications);
-        setPagination(res.data.pagination);
+        setNotifications(res.data.notifications || []);
+        setPagination(res.meta || { page: 1, totalPages: 1 });
       }
     } catch (err) {
       setError('Failed to load notifications.');
+      toast.error('Failed to load notifications.');
     } finally {
       setLoading(false);
     }
@@ -34,7 +39,7 @@ export default function CitizenNotifications() {
       await notificationApi.markAllAsRead();
       setNotifications(notifications.map(n => ({ ...n, isRead: true })));
     } catch (err) {
-      console.error('Failed to mark all as read');
+      toast.error('Failed to mark all as read');
     }
   };
 
@@ -44,12 +49,18 @@ export default function CitizenNotifications() {
         await notificationApi.markAsRead(notification.id);
         setNotifications(notifications.map(n => n.id === notification.id ? { ...n, isRead: true } : n));
       } catch (err) {
-        console.error('Failed to mark as read');
+        toast.error('Failed to mark as read');
       }
     }
 
     if (notification.requestId) {
-      navigate(PATHS.CITIZEN_REQUEST_DETAILS.replace(':id', notification.requestId));
+      if (role === ROLES.ADMIN) {
+        navigate(PATHS.ADMIN_REQUEST_DETAILS.replace(':id', notification.requestId));
+      } else if (role === ROLES.AGENT) {
+        navigate(PATHS.AGENT_REQUEST_DETAILS.replace(':id', notification.requestId));
+      } else {
+        navigate(PATHS.CITIZEN_REQUEST_DETAILS.replace(':id', notification.requestId));
+      }
     }
   };
 

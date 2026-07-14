@@ -58,6 +58,25 @@ const suspendAgent = [
     .withMessage('reason must be at most 500 characters'),
 ];
 
+const updateAgentBackground = [
+  ...mongoIdParam,
+  body('background')
+    .optional({ nullable: true, checkFalsy: true })
+    .trim()
+    .isLength({ max: 1000 })
+    .withMessage('background must be at most 1000 characters'),
+];
+
+const updateAgentDepartment = [
+  ...mongoIdParam,
+  body('department')
+    .notEmpty()
+    .withMessage('department is required')
+    .trim()
+    .isLength({ max: 100 })
+    .withMessage('department must be at most 100 characters'),
+];
+
 module.exports = {
   approveAgent: mongoIdParam,
   getRequestDetails: mongoIdParam,
@@ -65,4 +84,6 @@ module.exports = {
   listRequests,
   rejectAgent,
   suspendAgent,
+  updateAgentBackground,
+  updateAgentDepartment,
 };

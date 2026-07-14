@@ -1,3 +1,4 @@
+import { toast } from 'react-hot-toast';
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { PATHS } from '../../config/paths';
@@ -20,7 +21,8 @@ export default function AgentAssignedRequests() {
       setTotalPages(meta.totalPages || 1);
       setTotalItems(meta.total || (response.data?.requests || []).length);
     } catch (err) {
-      console.error(err);
+      toast.error(err?.response?.data?.message || 'An error occurred');
+        console.error(err);
     } finally {
       setIsLoading(false);
     }
@@ -60,6 +62,7 @@ export default function AgentAssignedRequests() {
                     <th className="px-6 py-4.5">Citizen Name</th>
                     <th className="px-6 py-4.5">Service Type</th>
                     <th className="px-6 py-4.5">Status</th>
+                    <th className="px-6 py-4.5 text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 text-[13px] font-semibold text-gray-600">
@@ -74,11 +77,19 @@ export default function AgentAssignedRequests() {
                         <td className="px-6 py-4.5 text-gray-800 font-bold">{req.citizen?.firstName} {req.citizen?.lastName}</td>
                         <td className="px-6 py-4.5">{req.serviceSnapshot?.serviceName || req.service?.name}</td>
                         <td className="px-6 py-4.5 uppercase text-[10px] font-extrabold text-gray-700">{req.status}</td>
+                        <td className="px-6 py-4.5 text-right shrink-0">
+                          <Link
+                            to={PATHS.AGENT_REQUEST_DETAILS.replace(':id', req._id)}
+                            className="h-8 px-3 rounded-md border border-slate-200 hover:border-blue-600 hover:bg-blue-50 text-[11px] font-bold text-gray-700 hover:text-blue-700 transition-all inline-flex items-center justify-center"
+                          >
+                            View Details
+                          </Link>
+                        </td>
                       </tr>
                     ))
                   ) : (
                     <tr>
-                      <td colSpan="4" className="px-6 py-12 text-center text-[14px] text-gray-400 font-bold bg-white">
+                      <td colSpan="5" className="px-6 py-12 text-center text-[14px] text-gray-400 font-bold bg-white">
                         No assigned requests found.
                       </td>
                     </tr>

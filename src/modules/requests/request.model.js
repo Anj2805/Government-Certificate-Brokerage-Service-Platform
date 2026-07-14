@@ -1,5 +1,7 @@
 const mongoose = require('mongoose');
 const RequestStatus = require('../../common/enums/request-status.enum');
+const DeliveryStatus = require('../../common/enums/delivery-status.enum');
+const PaymentStatus = require('../../common/enums/payment-status.enum');
 const UserRoles = require('../../common/enums/user-roles.enum');
 
 const statusHistorySchema = new mongoose.Schema(
@@ -56,6 +58,16 @@ const requestSchema = new mongoose.Schema(
       required: true,
       index: true,
     },
+    applicantSnapshot: {
+      firstName: { type: String, required: true },
+      lastName: { type: String, required: true },
+      email: { type: String, required: true },
+      phone: { type: String },
+      address: { type: String },
+      city: { type: String },
+      state: { type: String },
+      postalCode: { type: String },
+    },
     serviceSnapshot: {
       serviceName: {
         type: String,
@@ -88,6 +100,50 @@ const requestSchema = new mongoose.Schema(
       enum: Object.values(RequestStatus),
       default: RequestStatus.DRAFT,
       index: true,
+    },
+    paymentStatus: {
+      type: String,
+      enum: Object.values(PaymentStatus),
+      default: PaymentStatus.NOT_REQUIRED,
+      index: true,
+    },
+    paymentMethod: {
+      type: String,
+      enum: ['CASH_ON_DELIVERY'],
+    },
+    deliveryStatus: {
+      type: String,
+      enum: Object.values(DeliveryStatus),
+      default: DeliveryStatus.NOT_REQUIRED,
+      index: true,
+    },
+    trackingId: {
+      type: String,
+      unique: true,
+      sparse: true,
+      index: true,
+    },
+    deliveryAddress: {
+      recipientName: { type: String },
+      mobileNumber: { type: String },
+      alternateMobile: { type: String },
+      houseNumber: { type: String },
+      street: { type: String },
+      landmark: { type: String },
+      village: { type: String },
+      district: { type: String },
+      state: { type: String },
+      pinCode: { type: String },
+      addressType: { type: String, enum: ['Home', 'Work', 'Other'] },
+      deliveryInstructions: { type: String },
+    },
+    deliveryDeclarationAccepted: {
+      type: Boolean,
+      default: false,
+    },
+    payment: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Payment',
     },
     applicationData: {
       type: mongoose.Schema.Types.Mixed,

@@ -8,7 +8,9 @@ const config = require('../config');
 const ApiError = require('../common/errors/api-error');
 
 const configureSecurityMiddleware = (app) => {
-  app.use(helmet());
+  app.use(helmet({
+    crossOriginResourcePolicy: { policy: "cross-origin" }
+  }));
 
   app.use(
     cors({
@@ -28,7 +30,7 @@ const configureSecurityMiddleware = (app) => {
   app.use(
     rateLimit({
       windowMs: config.rateLimit.windowMs,
-      limit: config.rateLimit.maxRequests,
+      limit: config.isProduction ? config.rateLimit.maxRequests : 10000,
       standardHeaders: 'draft-7',
       legacyHeaders: false,
       message: {

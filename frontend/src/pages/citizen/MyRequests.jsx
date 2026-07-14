@@ -1,7 +1,9 @@
+import { toast } from 'react-hot-toast';
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { PATHS } from '../../config/paths';
 import { requestApi } from '../../api/requestApi';
+import StatCard from '../../components/ui/StatCard';
 
 export default function MyRequests() {
   const navigate = useNavigate();
@@ -40,7 +42,8 @@ export default function MyRequests() {
       const summaryData = await requestApi.getRequestsSummary();
       setSummary(summaryData);
     } catch (err) {
-      console.error("Failed to load request summary:", err);
+      toast.error(err?.response?.data?.message || 'An error occurred');
+        console.error("Failed to load request summary:", err);
     }
   };
 
@@ -83,6 +86,7 @@ export default function MyRequests() {
       setTotalPages(meta.totalPages || 1);
     } catch (err) {
       if (currentFetchId === fetchCounter.current) {
+        toast.error(err?.response?.data?.message || 'An error occurred');
         console.error(err);
         setIsError(true);
       }
@@ -168,7 +172,7 @@ export default function MyRequests() {
       document.body.removeChild(link);
     } catch (err) {
       console.error(err);
-      alert("Failed to export data.");
+      toast.error("Failed to export data.");
     }
   };
 
@@ -187,29 +191,29 @@ export default function MyRequests() {
     return (
       <div className="flex flex-col min-h-screen text-[#111827] bg-[#f8fafc]">
         <div className="max-w-[600px] w-full mx-auto px-6 py-20 flex-1 text-center">
-          <div className="h-16 w-16 mx-auto rounded-full bg-red-50 text-red-550 flex items-center justify-center border-2 border-red-200">
-            <svg className="h-8 w-8" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+          <div className="h-20 w-20 mx-auto rounded-3xl bg-red-50 text-red-500 flex items-center justify-center border border-red-100 shadow-sm transform -rotate-3 transition-transform hover:rotate-0">
+            <svg className="h-9 w-9" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
               <circle cx="12" cy="12" r="10" />
               <line x1="12" y1="8" x2="12" y2="12" />
               <line x1="12" y1="16" x2="12.01" y2="16" />
             </svg>
           </div>
-          <h1 className="text-[22px] font-extrabold text-gray-900 mt-6">Failed to Load Requests</h1>
-          <p className="text-[14px] text-gray-500 font-semibold mt-2">
-            An error occurred while loading your application history. Please try again.
+          <h1 className="text-[24px] font-extrabold text-[#0f294a] mt-6 tracking-tight">Failed to Load Requests</h1>
+          <p className="text-[14.5px] text-gray-500 font-medium mt-2 max-w-sm mx-auto">
+            We encountered an issue while retrieving your application history. Please try again.
           </p>
           <div className="mt-8 flex justify-center gap-4">
             <button
               onClick={() => navigate(PATHS.CITIZEN_DASHBOARD)}
-              className="h-11 px-5 rounded-lg border border-gray-200 hover:bg-gray-50 text-[13.5px] font-bold text-gray-700 transition-colors"
+              className="h-11 px-6 rounded-lg border border-gray-200 hover:border-gray-300 hover:bg-gray-50 text-[13.5px] font-bold text-gray-700 transition-all"
             >
               Back to Dashboard
             </button>
             <button
               onClick={fetchRequests}
-              className="h-11 px-5 rounded-lg bg-[#13448a] hover:bg-[#0c316a] text-[13.5px] font-bold text-white shadow-md transition-colors"
+              className="h-11 px-6 rounded-lg bg-[#13448a] hover:bg-[#0c316a] text-[13.5px] font-bold text-white shadow-md shadow-[#13448a]/20 transition-all hover:-translate-y-0.5"
             >
-              Retry
+              Retry Loading
             </button>
           </div>
         </div>
@@ -218,8 +222,8 @@ export default function MyRequests() {
   }
 
   return (
-    <div className="flex flex-col min-h-screen text-[#111827]">
-      <div className="max-w-[1344px] w-full mx-auto px-6 py-8 flex-1 space-y-8">
+    <>
+      <div className="max-w-[1280px] w-full mx-auto px-4 md:px-6 lg:px-8 py-8 space-y-8">
 
         {/* Title Header with Breadcrumbs */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -249,66 +253,53 @@ export default function MyRequests() {
             </svg>
             New Request
           </button>
-        </div>
-
-        {/* Mini Stats Card Row */}
+        </div>        {/* Mini Stats Card Row */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {/* Card 1 */}
-          <div className="bg-white rounded-xl border border-[#e2e8f0] p-4.5 shadow-sm flex items-center gap-4">
-            <div className="h-10 w-10 rounded-lg bg-[#eff6ff] text-[#13448a] flex items-center justify-center shrink-0">
-              <svg style={{ width: '20px', height: '20px' }} fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+          <StatCard
+            title="Total Requests"
+            value={totalCount}
+            colorTheme="blue"
+            icon={
+              <svg style={{ width: '22px', height: '22px' }} fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
                 <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
                 <polyline points="14 2 14 8 20 8" />
               </svg>
-            </div>
-            <div>
-              <span className="text-[12px] font-bold text-gray-400 block uppercase tracking-wider">Total Requests</span>
-              <span className="text-[20px] font-extrabold text-gray-800 mt-0.5 block">{totalCount}</span>
-            </div>
-          </div>
-
-          {/* Card 2 */}
-          <div className="bg-white rounded-xl border border-[#e2e8f0] p-4.5 shadow-sm flex items-center gap-4">
-            <div className="h-10 w-10 rounded-lg bg-[#eff6ff] text-[#13448a] flex items-center justify-center shrink-0">
-              <svg style={{ width: '20px', height: '20px' }} fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+            }
+          />
+          <StatCard
+            title="Active Now"
+            value={activeCount}
+            colorTheme="orange"
+            icon={
+              <svg style={{ width: '22px', height: '22px' }} fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
                 <circle cx="12" cy="12" r="10" />
                 <polyline points="12 6 12 12 16 14" />
               </svg>
-            </div>
-            <div>
-              <span className="text-[12px] font-bold text-gray-400 block uppercase tracking-wider">Active Now</span>
-              <span className="text-[20px] font-extrabold text-gray-800 mt-0.5 block">{activeCount}</span>
-            </div>
-          </div>
-
-          {/* Card 3 */}
-          <div className="bg-white rounded-xl border border-[#e2e8f0] p-4.5 shadow-sm flex items-center gap-4">
-            <div className="h-10 w-10 rounded-lg bg-red-50 text-red-655 flex items-center justify-center shrink-0">
-              <svg style={{ width: '20px', height: '20px' }} fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+            }
+          />
+          <StatCard
+            title="Action Needed"
+            value={actionNeededCount}
+            colorTheme="red"
+            icon={
+              <svg style={{ width: '22px', height: '22px' }} fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
                 <circle cx="12" cy="12" r="10" />
                 <line x1="12" y1="8" x2="12" y2="12" />
                 <line x1="12" y1="16" x2="12.01" y2="16" />
               </svg>
-            </div>
-            <div>
-              <span className="text-[12px] font-bold text-gray-400 block uppercase tracking-wider">Action Needed</span>
-              <span className="text-[20px] font-extrabold text-red-550 mt-0.5 block">{actionNeededCount}</span>
-            </div>
-          </div>
-
-          {/* Card 4 */}
-          <div className="bg-white rounded-xl border border-[#e2e8f0] p-4.5 shadow-sm flex items-center gap-4">
-            <div className="h-10 w-10 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
-              <svg style={{ width: '20px', height: '20px' }} fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+            }
+          />
+          <StatCard
+            title="Completed"
+            value={completedCount}
+            colorTheme="green"
+            icon={
+              <svg style={{ width: '22px', height: '22px' }} fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
                 <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
                 <polyline points="22 4 12 14.01 9 11.01" />
               </svg>
-            </div>
-            <div>
-              <span className="text-[12px] font-bold text-gray-400 block uppercase tracking-wider">Total Completed</span>
-              <span className="text-[20px] font-extrabold text-gray-800 mt-0.5 block">{completedCount}</span>
-            </div>
-          </div>
+            }
+          />
         </div>
 
         {/* Filters and Search Bar Row */}
@@ -356,8 +347,8 @@ export default function MyRequests() {
                     { label: "Draft", value: "draft" },
                     { label: "Submitted", value: "submitted" },
                     { label: "Assigned", value: "assigned" },
-                    { label: "In Progress", value: "in_progress" },
-                    { label: "Action Needed", value: "documents_required" },
+                    { label: "In Progress", value: "under_review" },
+                    { label: "Action Needed", value: "correction_required" },
                     { label: "Completed", value: "completed" },
                     { label: "Rejected", value: "rejected" },
                     { label: "Cancelled", value: "cancelled" }
@@ -452,6 +443,7 @@ export default function MyRequests() {
                   <th className="px-6 py-4.5">Service Name</th>
                   <th className="px-6 py-4.5">Assigned Agent</th>
                   <th className="px-6 py-4.5">Status</th>
+                  <th className="px-6 py-4.5">Payment</th>
                   <th className="px-6 py-4.5">Created Date</th>
                   <th className="px-6 py-4.5 text-right">Action</th>
                 </tr>
@@ -501,7 +493,7 @@ export default function MyRequests() {
                               Completed
                             </span>
                           )}
-                          {req.status === "in_progress" && (
+                          {req.status === "under_review" && (
                             <span className="inline-flex items-center gap-1 text-amber-700 bg-amber-50 border border-amber-100 px-2.5 py-0.5 rounded-full text-[10.5px] font-extrabold">
                               <span className="h-1.5 w-1.5 rounded-full bg-amber-600"></span>
                               In Progress
@@ -513,9 +505,9 @@ export default function MyRequests() {
                               Assigned
                             </span>
                           )}
-                          {req.status === "documents_required" && (
-                            <span className="inline-flex items-center gap-1 text-red-700 bg-red-50 border border-red-205 px-2.5 py-0.5 rounded-full text-[10.5px] font-extrabold">
-                              <span className="h-1.5 w-1.5 rounded-full bg-red-600"></span>
+                          {req.status === "correction_required" && (
+                            <span className="inline-flex items-center gap-1 text-red-700 bg-red-50 border border-red-200 px-2.5 py-0.5 rounded-full text-[10.5px] font-extrabold">
+                              <span className="h-1.5 w-1.5 rounded-full bg-red-600 animate-pulse"></span>
                               Action Needed
                             </span>
                           )}
@@ -545,6 +537,26 @@ export default function MyRequests() {
                           )}
                         </td>
 
+                        {/* Payment Status */}
+                        <td className="px-6 py-4.5">
+                          {req.paymentStatus === "NOT_REQUIRED" && (
+                            <span className="text-[11px] font-extrabold text-gray-500">Not Required</span>
+                          )}
+                          {req.paymentStatus === "DUE" && (
+                            <span className="inline-flex items-center gap-1 text-rose-700 bg-rose-50 border border-rose-200 px-2.5 py-0.5 rounded-full text-[10.5px] font-extrabold">
+                              Due
+                            </span>
+                          )}
+                          {req.paymentStatus === "PAID" && (
+                            <span className="inline-flex items-center gap-1 text-emerald-700 bg-emerald-50 border border-emerald-100 px-2.5 py-0.5 rounded-full text-[10.5px] font-extrabold">
+                              Paid
+                            </span>
+                          )}
+                          {req.paymentStatus === "WAIVED" && (
+                            <span className="text-[11px] font-extrabold text-gray-500">Waived</span>
+                          )}
+                        </td>
+
                         {/* Created Date */}
                         <td className="px-6 py-4.5 text-gray-500 font-semibold">{createdDate}</td>
 
@@ -567,8 +579,35 @@ export default function MyRequests() {
                   })
                 ) : (
                   <tr>
-                    <td colSpan="6" className="px-6 py-12 text-center text-[14px] text-gray-400 font-bold">
-                      No matching service requests found. Try adjusting your filter parameters.
+                    <td colSpan="6" className="px-6 py-20 text-center bg-gray-50/30">
+                      <div className="flex flex-col items-center justify-center">
+                        <div className="h-20 w-20 rounded-2xl bg-[#f0f4fa] flex items-center justify-center text-[#13448a] mb-5 border border-[#dbeafe] shadow-sm transform -rotate-3 transition-transform hover:rotate-0">
+                          <svg style={{ width: '36px', height: '36px' }} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                            <polyline points="14 2 14 8 20 8" />
+                            <line x1="16" y1="13" x2="8" y2="13" />
+                            <line x1="16" y1="17" x2="8" y2="17" />
+                            <polyline points="10 9 9 9 8 9" />
+                          </svg>
+                        </div>
+                        <h3 className="text-[17px] font-extrabold text-[#0f294a]">No Matches Found</h3>
+                        <p className="text-[14px] text-gray-500 font-medium max-w-sm mt-2">
+                          We couldn't find any service requests matching your current filters or search terms.
+                        </p>
+                        {(statusFilter !== "All" || timeFilter !== "All Time" || searchTerm) && (
+                          <button
+                            onClick={() => {
+                              setStatusFilter("All");
+                              setTimeFilter("All Time");
+                              setSearchTerm("");
+                              setCurrentPage(1);
+                            }}
+                            className="mt-6 text-[13.5px] font-bold text-[#13448a] hover:text-[#0c316a] hover:underline"
+                          >
+                            Clear all filters
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 )}
@@ -640,7 +679,6 @@ export default function MyRequests() {
             </Link>
           </div>
         </div>
-
       </div>
 
       {/* Footer */}
@@ -656,6 +694,6 @@ export default function MyRequests() {
           </div>
         </div>
       </footer>
-    </div>
+    </>
   );
 }

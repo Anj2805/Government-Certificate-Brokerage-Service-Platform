@@ -26,6 +26,25 @@ const ensureApprovedAgent = (req, res, next) => {
 
 router.use(authenticate, authorizeRoles(UserRoles.AGENT), ensureApprovedAgent);
 
+router.get('/profile', agentController.getProfile);
+
+router.patch(
+  '/profile',
+  validateRequest(agentValidation.updateProfile),
+  agentController.updateProfile
+);
+
+router.post(
+  '/profile/photo',
+  uploadSingleDocument('photo'),
+  agentController.uploadProfilePhoto
+);
+
+router.delete('/profile/photo', agentController.removeProfilePhoto);
+
+// Note: This endpoint streams/redirects the profile photo inline (no attachment)
+router.get('/profile/photo', agentController.getProfilePhoto);
+
 router.get(
   '/dashboard/stats',
   authorizePermission(Permissions.REQUEST_VIEW_ALL),

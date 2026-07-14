@@ -12,6 +12,47 @@ const getDashboardMetrics = asyncHandler(async (_req, res) => {
   });
 });
 
+const getAnalytics = asyncHandler(async (req, res) => {
+  const data = await adminService.getAnalytics(req.query);
+
+  return ApiResponse.success(res, {
+    message: 'Admin analytics fetched successfully',
+    data,
+  });
+});
+
+const globalSearch = asyncHandler(async (req, res) => {
+  const result = await adminService.globalSearch(req.query.q);
+  return ApiResponse.success(res, {
+    message: 'Global search completed successfully',
+    data: result,
+  });
+});
+
+const listUsers = asyncHandler(async (req, res) => {
+  const result = await adminService.listUsers(req.query);
+
+  return ApiResponse.success(res, {
+    message: 'Users fetched successfully',
+    data: { users: result.items },
+    meta: {
+      page: result.page,
+      limit: result.limit,
+      total: result.total,
+      totalPages: result.totalPages,
+    },
+  });
+});
+
+const getUserDetails = asyncHandler(async (req, res) => {
+  const user = await adminService.getUserDetails(req.params.id);
+
+  return ApiResponse.success(res, {
+    message: 'User details fetched successfully',
+    data: { user },
+  });
+});
+
 const listAgents = asyncHandler(async (req, res) => {
   const result = await adminService.listAgents(req.query);
 
@@ -24,6 +65,15 @@ const listAgents = asyncHandler(async (req, res) => {
       total: result.total,
       totalPages: result.totalPages,
     },
+  });
+});
+
+const getAgentDetails = asyncHandler(async (req, res) => {
+  const agent = await adminService.getAgentDetails(req.params.id);
+
+  return ApiResponse.success(res, {
+    message: 'Agent details fetched successfully',
+    data: { agent },
   });
 });
 
@@ -84,12 +134,42 @@ const getRequestDetails = asyncHandler(async (req, res) => {
   });
 });
 
+const updateAgentBackground = asyncHandler(async (req, res) => {
+  const agent = await adminService.updateAgentBackground(req.params.id, req.body.background);
+
+  logger.info({ audit: true, eventType: 'AGENT_BACKGROUND_UPDATED', adminId: req.user.id, targetAgentId: req.params.id, requestId: req.id }, 'Agent background updated');
+
+  return ApiResponse.success(res, {
+    message: 'Agent background updated successfully',
+    data: { agent },
+  });
+});
+
+const updateAgentDepartment = asyncHandler(async (req, res) => {
+  const agent = await adminService.updateAgentDepartment(req.params.id, req.body.department);
+
+  logger.info({ audit: true, eventType: 'AGENT_DEPARTMENT_UPDATED', adminId: req.user.id, targetAgentId: req.params.id, requestId: req.id }, 'Agent department updated');
+
+  return ApiResponse.success(res, {
+    message: 'Agent department updated successfully',
+    data: { agent },
+  });
+});
+
 module.exports = {
-  approveAgent,
   getDashboardMetrics,
-  getRequestDetails,
+  getAnalytics,
+  globalSearch,
+  listUsers,
+  getUserDetails,
   listAgents,
-  listRequests,
+  getAgentDetails,
+  approveAgent,
   rejectAgent,
   suspendAgent,
+  suspendAgent,
+  updateAgentBackground,
+  updateAgentDepartment,
+  listRequests,
+  getRequestDetails,
 };

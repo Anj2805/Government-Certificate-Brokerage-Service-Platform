@@ -81,6 +81,15 @@ router.post(
 );
 
 router.post(
+  '/:id/record-payment',
+  authenticate,
+  authorizeAnyPermission(Permissions.REQUEST_PROCESS, Permissions.REQUEST_MANAGE),
+  authorizeRoles(UserRoles.AGENT, UserRoles.ADMIN),
+  validateRequest(requestValidation.recordPayment),
+  requestController.recordPayment,
+);
+
+router.post(
   '/:id/withdraw',
   authenticate,
   authorizePermission(Permissions.REQUEST_VIEW_OWN),
@@ -135,7 +144,7 @@ router.post(
   '/agent/:id/request-correction',
   authenticate,
   authorizePermission(Permissions.REQUEST_UPDATE_STATUS),
-  authorizeRoles(UserRoles.AGENT),
+  authorizeRoles(UserRoles.AGENT, UserRoles.ADMIN),
   validateRequest(requestValidation.requestCorrection),
   requestController.requestCorrection,
 );
@@ -156,6 +165,23 @@ router.post(
   authorizeRoles(UserRoles.AGENT),
   validateRequest(requestValidation.rejectRequest),
   requestController.rejectRequest,
+);
+
+router.post(
+  '/agent/:id/dispatch',
+  authenticate,
+  authorizePermission(Permissions.REQUEST_UPDATE_STATUS),
+  authorizeRoles(UserRoles.AGENT, UserRoles.ADMIN),
+  requestController.dispatchDelivery,
+);
+
+router.post(
+  '/agent/:id/verify-delivery',
+  authenticate,
+  authorizePermission(Permissions.REQUEST_UPDATE_STATUS),
+  authorizeRoles(UserRoles.AGENT, UserRoles.ADMIN),
+  validateRequest(requestValidation.verifyDelivery),
+  requestController.verifyDelivery,
 );
 
 module.exports = router;

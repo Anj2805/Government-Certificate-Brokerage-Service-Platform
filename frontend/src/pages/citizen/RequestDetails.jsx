@@ -4,6 +4,7 @@ import { PATHS } from '../../config/paths';
 import { requestApi } from '../../api/requestApi';
 import { documentApi } from '../../api/documentApi';
 import { getUploadUrl } from '../../api/httpClient';
+import toast from 'react-hot-toast';
 
 export default function RequestDetails() {
   const { id } = useParams();
@@ -27,6 +28,7 @@ export default function RequestDetails() {
     } catch (err) {
       console.error(err);
       setIsError(true);
+      toast.error(err.response?.data?.message || 'Failed to load request details');
     } finally {
       setIsLoading(false);
     }
@@ -42,10 +44,11 @@ export default function RequestDetails() {
     try {
       await requestApi.cancelRequest(request._id, { reason: "Cancelled by citizen" });
       setShowCancelModal(false);
+      toast.success('Request cancelled successfully.');
       fetchRequestDetails();
     } catch (err) {
       console.error(err);
-      alert("Failed to cancel request. Please try again.");
+      toast.error('Failed to cancel request. Please try again.');
     }
   };
 
@@ -53,23 +56,24 @@ export default function RequestDetails() {
     try {
       setIsLoading(true);
       await requestApi.submitRequest(request._id, { reason: "Submitted by citizen" });
+      toast.success('Request submitted successfully.');
       fetchRequestDetails();
     } catch (err) {
       console.error(err);
-      alert("Failed to submit request. Please try again.");
+      toast.error('Failed to submit request. Please try again.');
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleFileUpload = async (e) => {
+  const handleFileUpload = (docType = 'additional_proof') => async (e) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
       setUploadingDoc(true);
       try {
         const formData = new FormData();
         formData.append('document', file);
-        formData.append('documentType', 'additional_proof');
+        formData.append('documentType', docType);
         formData.append('title', file.name);
         formData.append('requestId', request._id);
         
@@ -81,11 +85,10 @@ export default function RequestDetails() {
         // Refresh request details to see the new document
         const updated = await requestApi.getRequestDetails(id);
         setRequest(updated);
-        
-        alert("Document uploaded and attached successfully!");
+        toast.success('Document uploaded and attached successfully!');
       } catch (err) {
         console.error(err);
-        alert(`Failed to upload document: ${err.response?.data?.message || err.message}`);
+        toast.error(`Failed to upload document: ${err.response?.data?.message || err.message}`);
       } finally {
         setUploadingDoc(false);
       }
@@ -140,21 +143,22 @@ export default function RequestDetails() {
   }
 
   // Dynamic progress timeline calculations
+  // Dynamic progress timeline calculations
   const getTimelineStepStatus = (stepIndex) => {
-    const statusOrder = ['draft', 'submitted', 'assigned', 'in_progress', 'completed'];
-    const currentStatusIndex = statusOrder.indexOf(request.status);
+    const statusOrder = ['draft', 'submitted', 'assigned', 'under_review', 'approved', 'completed'];
+    
+    let effectiveStatus = request.status;
+    if (effectiveStatus === 'correction_required') effectiveStatus = 'under_review';
+    
+    const currentStatusIndex = statusOrder.indexOf(effectiveStatus);
     
     if (request.status === 'cancelled' || request.status === 'rejected') {
       // For cancelled/rejected, only show draft as blue, rest as gray
       return stepIndex === 0 ? 'completed' : 'pending';
     }
     
-    if (currentStatusIndex >= stepIndex) {
-      return 'completed';
-    }
-    if (currentStatusIndex + 1 === stepIndex) {
-      return 'active';
-    }
+    if (currentStatusIndex >= stepIndex) return 'completed';
+    if (currentStatusIndex + 1 === stepIndex) return 'active';
     return 'pending';
   };
 
@@ -162,7 +166,7 @@ export default function RequestDetails() {
     switch (status) {
       case 'completed':
         return 'bg-emerald-50 text-emerald-700 border-emerald-200';
-      case 'in_progress':
+      case 'under_review':
         return 'bg-amber-50 text-amber-700 border-amber-205';
       case 'assigned':
         return 'bg-indigo-50 text-indigo-700 border-indigo-200';
@@ -184,10 +188,21 @@ export default function RequestDetails() {
     return status.charAt(0).toUpperCase() + status.slice(1).replace('_', ' ');
   };
 
+  const missingDocs = (request.serviceSnapshot?.requiredDocuments || []).filter(docType => {
+    const docs = (request.documents || []).filter(d => d.documentType?.toLowerCase() === docType.toLowerCase());
+    if (docs.length === 0) return true;
+    const latest = docs.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))[0];
+    return latest.status === 'rejected';
+  });
+
   // Date/Days calculations
   const estDays = request.serviceSnapshot?.estimatedProcessingDays || request.service?.estimatedProcessingDays || 7;
   const appliedDate = new Date(request.createdAt);
   const estDate = new Date(appliedDate.getTime() + estDays * 24 * 60 * 60 * 1000);
+  const estDateStr = estDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+
+  const citizenDocs = (request.documents || []).filter(doc => String(doc.uploadedBy) === String(doc.ownerUser));
+  const agentDocs = (request.documents || []).filter(doc => String(doc.uploadedBy) !== String(doc.ownerUser));
 
   return (
     <div className="flex flex-col min-h-screen text-[#111827]">
@@ -231,7 +246,7 @@ export default function RequestDetails() {
               </button>
             )}
 
-            {['draft', 'submitted', 'assigned', 'in_progress', 'documents_required'].includes(request.status) && (
+            {['draft', 'submitted', 'assigned', 'under_review', 'correction_required'].includes(request.status) && (
               <label className={`h-10 px-4 rounded-lg border border-[#e2e8f0] bg-white hover:bg-gray-50 text-[13px] font-bold text-gray-700 transition-colors flex items-center gap-2 cursor-pointer shadow-sm ${uploadingDoc ? 'opacity-50 pointer-events-none' : ''}`}>
                 <svg style={{ width: '16px', height: '16px' }} className="text-gray-400" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
                   <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
@@ -240,7 +255,7 @@ export default function RequestDetails() {
                   <line x1="9" y1="15" x2="15" y2="15" />
                 </svg>
                 {uploadingDoc ? "Uploading..." : "Add Documents"}
-                <input type="file" className="hidden" onChange={handleFileUpload} disabled={uploadingDoc} />
+                <input type="file" className="hidden" onChange={handleFileUpload('additional_proof')} disabled={uploadingDoc} />
               </label>
             )}
 
@@ -248,7 +263,7 @@ export default function RequestDetails() {
               <button
                 type="button"
                 onClick={() => setShowCancelModal(true)}
-                className="h-10 px-4 rounded-lg bg-red-650 hover:bg-red-700 text-[13px] font-bold text-white transition-colors flex items-center gap-2 shadow-sm"
+                className="h-10 px-4 rounded-lg bg-red-600 hover:bg-red-700 text-[13px] font-bold text-white transition-colors flex items-center gap-2 shadow-sm"
               >
                 <svg style={{ width: '16px', height: '16px' }} fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
                   <circle cx="12" cy="12" r="10" />
@@ -272,9 +287,10 @@ export default function RequestDetails() {
             <div className="absolute left-0 top-1/2 h-[3px] bg-[#13448a] -translate-y-1/2 z-0 transition-all duration-500" style={{
               width: request.status === "cancelled" || request.status === "rejected" ? "0%" :
                      request.status === "draft" ? "0%" :
-                     request.status === "submitted" ? "25%" :
-                     request.status === "assigned" ? "50%" :
-                     request.status === "in_progress" ? "75%" : "100%"
+                     request.status === "submitted" ? "20%" :
+                     request.status === "assigned" ? "40%" :
+                     request.status === "under_review" || request.status === "correction_required" ? "60%" :
+                     request.status === "approved" ? "80%" : "100%"
             }}></div>
 
             {/* Step 1: Draft */}
@@ -324,15 +340,29 @@ export default function RequestDetails() {
                   <polyline points="12 6 12 12 16 14" />
                 </svg>
               </div>
-              <span className={`text-[11px] font-extrabold mt-2 tracking-wider uppercase ${getTimelineStepStatus(3) !== 'pending' ? 'text-[#13448a]' : 'text-gray-400'}`}>In Progress</span>
+              <span className={`text-[11px] font-extrabold mt-2 tracking-wider uppercase ${getTimelineStepStatus(3) !== 'pending' ? 'text-[#13448a]' : 'text-gray-400'}`}>Under Review</span>
             </div>
 
-            {/* Step 5: Completed */}
+            {/* Step 5: Approved */}
+            <div className="flex flex-col items-center z-10 bg-white px-2">
+              <div style={{ width: '36px', height: '36px' }} className={`rounded-full flex items-center justify-center border-2 ${
+                getTimelineStepStatus(4) === 'completed' || getTimelineStepStatus(4) === 'active' ? "bg-[#13448a] border-[#13448a] text-white" : "border-gray-200 bg-white text-gray-400"
+              }`}>
+                <svg style={{ width: '16px', height: '16px' }} fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                  <polyline points="14 2 14 8 20 8" />
+                  <polyline points="9 15 11 17 15 12" />
+                </svg>
+              </div>
+              <span className={`text-[11px] font-extrabold mt-2 tracking-wider uppercase ${getTimelineStepStatus(4) !== 'pending' ? 'text-[#13448a]' : 'text-gray-400'}`}>Approved</span>
+            </div>
+
+            {/* Step 6: Completed */}
             <div className="flex flex-col items-center z-10 bg-white px-2">
               <div style={{ width: '36px', height: '36px' }} className={`rounded-full flex items-center justify-center border-2 text-[14px] font-extrabold ${
                 request.status === 'completed' ? "bg-emerald-500 border-emerald-500 text-white" : "border-gray-200 bg-white text-gray-400"
               }`}>
-                {request.status === 'completed' ? "✓" : "5"}
+                {request.status === 'completed' ? "✓" : "6"}
               </div>
               <span className={`text-[11px] font-extrabold mt-2 tracking-wider uppercase ${request.status === 'completed' ? 'text-emerald-600' : 'text-gray-400'}`}>Completed</span>
             </div>
@@ -346,6 +376,32 @@ export default function RequestDetails() {
           {/* Main Content (2 cols) */}
           <div className="lg:col-span-2 space-y-8">
             
+            {request.status === 'rejected' && (
+              <div className="bg-red-50 rounded-2xl border border-red-200 shadow-sm p-6 mb-6">
+                <div className="flex items-start gap-4">
+                  <div className="h-12 w-12 rounded-full bg-red-100 flex items-center justify-center shrink-0">
+                    <svg style={{ width: '24px', height: '24px' }} className="text-red-600" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                      <circle cx="12" cy="12" r="10" />
+                      <line x1="12" y1="8" x2="12" y2="12" />
+                      <line x1="12" y1="16" x2="12.01" y2="16" />
+                    </svg>
+                  </div>
+                  <div className="flex-1">
+                    <h2 className="text-[18px] font-extrabold text-red-800">Application Rejected</h2>
+                    <p className="text-[14.5px] font-medium text-red-700 mt-1.5 mb-2 leading-relaxed">
+                      Your application has been rejected by the assigned agent. Please review the agent's reason below.
+                    </p>
+                    <div className="bg-white/60 p-4 rounded-xl border border-red-100">
+                      <span className="text-[11px] font-extrabold text-red-400 uppercase tracking-wider block mb-1">Agent's Reason</span>
+                      <p className="text-[14px] font-bold text-red-900 leading-relaxed">
+                        {request.statusHistory?.find(h => h.toStatus === 'rejected')?.reason || 'No specific reason provided.'}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Service Information block */}
             <div className="bg-white rounded-2xl border border-[#e2e8f0] shadow-sm p-6 space-y-6">
               <h2 className="text-[17px] font-extrabold text-[#0f294a] pb-4.5 border-b border-gray-100 flex items-center gap-2">
@@ -395,6 +451,214 @@ export default function RequestDetails() {
               )}
             </div>
 
+            {/* Payment Details Block */}
+            {request.paymentStatus !== "NOT_REQUIRED" && (
+              <div className="bg-white rounded-2xl border border-[#e2e8f0] shadow-sm p-6 space-y-6">
+                <h2 className="text-[17px] font-extrabold text-[#0f294a] pb-4.5 border-b border-gray-100 flex items-center gap-2">
+                  <svg style={{ width: '18px', height: '18px' }} fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                    <rect x="2" y="5" width="20" height="14" rx="2" ry="2"></rect>
+                    <line x1="2" y1="10" x2="22" y2="10"></line>
+                  </svg>
+                  Payment Information
+                </h2>
+
+                <div className="grid gap-6 sm:grid-cols-3">
+                  <div>
+                    <span className="text-[11.5px] font-bold text-gray-400 uppercase tracking-wider block">Payment Status</span>
+                    <span className="mt-1 block">
+                      {request.paymentStatus === 'COD_DUE' && (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-200">COD Due</span>
+                      )}
+                      {request.paymentStatus === 'PAID' && (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-100">Paid</span>
+                      )}
+                      {request.paymentStatus === 'WAIVED' && (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold bg-gray-50 text-gray-700 border border-gray-200">Waived</span>
+                      )}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-[11.5px] font-bold text-gray-400 uppercase tracking-wider block">Method</span>
+                    <span className="text-[14.5px] font-extrabold text-gray-800 mt-1 block">
+                      {request.paymentMethod === 'CASH_ON_DELIVERY' ? 'Cash on Delivery' : request.paymentMethod}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-[11.5px] font-bold text-gray-400 uppercase tracking-wider block">Amount</span>
+                    <span className="text-[14.5px] font-extrabold text-gray-800 mt-1 block">
+                      ₹ {request.serviceSnapshot?.serviceCharge || 0}
+                    </span>
+                  </div>
+                </div>
+
+                {request.paymentStatus === 'COD_DUE' && (
+                  <div className="flex gap-2.5 rounded-xl bg-amber-50 p-4 border border-amber-200 text-[12.5px] font-semibold text-amber-800 leading-normal mt-2">
+                    <svg style={{ width: '18px', height: '18px' }} className="text-amber-700 shrink-0 mt-0.5" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                      <circle cx="12" cy="12" r="10" />
+                      <line x1="12" y1="16" x2="12" y2="12" />
+                      <line x1="12" y1="8" x2="12.01" y2="8" />
+                    </svg>
+                    Payment of ₹{request.serviceSnapshot?.serviceCharge || 0} will be collected at the time of secure delivery. No online payment is required.
+                  </div>
+                )}
+              </div>
+            )}
+            
+            {/* Delivery Address Block */}
+            {request.deliveryAddress && request.deliveryAddress.houseNumber && (
+              <div className="bg-white rounded-2xl border border-[#e2e8f0] shadow-sm p-6 space-y-6">
+                <div className="flex items-center justify-between pb-4.5 border-b border-gray-100">
+                  <h2 className="text-[17px] font-extrabold text-[#0f294a] flex items-center gap-2">
+                    <svg style={{ width: '18px', height: '18px' }} fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                      <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+                      <circle cx="12" cy="10" r="3"></circle>
+                    </svg>
+                    Delivery Information
+                  </h2>
+                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded text-[11px] font-extrabold uppercase tracking-wider ${
+                    request.deliveryStatus === 'DELIVERED' ? 'bg-emerald-50 text-emerald-700' :
+                    request.deliveryStatus === 'DISPATCHED' || request.deliveryStatus === 'OUT_FOR_DELIVERY' ? 'bg-blue-50 text-blue-700' :
+                    request.deliveryStatus === 'READY_FOR_DISPATCH' ? 'bg-amber-50 text-amber-700' :
+                    request.deliveryStatus === 'FAILED' ? 'bg-red-50 text-red-700' : 'bg-gray-100 text-gray-500'
+                  }`}>
+                    {request.deliveryStatus ? request.deliveryStatus.replace(/_/g, ' ') : 'Pending'}
+                  </span>
+                </div>
+
+                {request.deliveryStatus && request.deliveryStatus !== 'PENDING' && (
+                  <div className="mb-6 pt-2 pb-2">
+                    <div className="flex items-center justify-between relative max-w-[400px] mx-auto">
+                      <div className="absolute left-0 right-0 top-1/2 h-[3px] bg-gray-100 -translate-y-1/2 z-0"></div>
+                      <div className="absolute left-0 top-1/2 h-[3px] bg-blue-500 -translate-y-1/2 z-0 transition-all duration-500" style={{
+                        width: request.deliveryStatus === "READY_FOR_DISPATCH" ? "0%" :
+                               request.deliveryStatus === "DISPATCHED" ? "50%" :
+                               request.deliveryStatus === "OUT_FOR_DELIVERY" ? "50%" :
+                               request.deliveryStatus === "DELIVERED" ? "100%" : "0%"
+                      }}></div>
+
+                      <div className="flex flex-col items-center z-10 bg-white px-2">
+                        <div style={{ width: '24px', height: '24px' }} className={`rounded-full flex items-center justify-center border-2 ${
+                          ['READY_FOR_DISPATCH', 'DISPATCHED', 'OUT_FOR_DELIVERY', 'DELIVERED'].includes(request.deliveryStatus) ? "bg-blue-500 border-blue-500 text-white" : "border-gray-200 bg-white"
+                        }`}>
+                          {['READY_FOR_DISPATCH', 'DISPATCHED', 'OUT_FOR_DELIVERY', 'DELIVERED'].includes(request.deliveryStatus) && (
+                            <svg style={{ width: '12px', height: '12px' }} fill="none" stroke="currentColor" strokeWidth="3" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12" /></svg>
+                          )}
+                        </div>
+                        <span className="text-[10px] font-extrabold text-blue-600 mt-2 tracking-wider uppercase text-center">Ready</span>
+                      </div>
+
+                      <div className="flex flex-col items-center z-10 bg-white px-2">
+                        <div style={{ width: '24px', height: '24px' }} className={`rounded-full flex items-center justify-center border-2 ${
+                          ['DISPATCHED', 'OUT_FOR_DELIVERY', 'DELIVERED'].includes(request.deliveryStatus) ? "bg-blue-500 border-blue-500 text-white" : "border-gray-200 bg-white"
+                        }`}>
+                           {['DISPATCHED', 'OUT_FOR_DELIVERY', 'DELIVERED'].includes(request.deliveryStatus) && (
+                            <svg style={{ width: '12px', height: '12px' }} fill="none" stroke="currentColor" strokeWidth="3" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12" /></svg>
+                          )}
+                        </div>
+                        <span className={`text-[10px] font-extrabold mt-2 tracking-wider uppercase text-center ${['DISPATCHED', 'OUT_FOR_DELIVERY', 'DELIVERED'].includes(request.deliveryStatus) ? 'text-blue-600' : 'text-gray-400'}`}>Dispatched</span>
+                      </div>
+
+                      <div className="flex flex-col items-center z-10 bg-white px-2">
+                        <div style={{ width: '24px', height: '24px' }} className={`rounded-full flex items-center justify-center border-2 ${
+                          request.deliveryStatus === 'DELIVERED' ? "bg-emerald-500 border-emerald-500 text-white" : "border-gray-200 bg-white"
+                        }`}>
+                           {request.deliveryStatus === 'DELIVERED' && (
+                            <svg style={{ width: '12px', height: '12px' }} fill="none" stroke="currentColor" strokeWidth="3" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12" /></svg>
+                          )}
+                        </div>
+                        <span className={`text-[10px] font-extrabold mt-2 tracking-wider uppercase text-center ${request.deliveryStatus === 'DELIVERED' ? 'text-emerald-600' : 'text-gray-400'}`}>Delivered</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                <div className="grid gap-6 sm:grid-cols-2">
+                  <div className="sm:col-span-2">
+                    <span className="text-[11.5px] font-bold text-gray-400 uppercase tracking-wider block">Recipient</span>
+                    <span className="text-[14.5px] font-extrabold text-gray-800 mt-1 block">
+                      {request.deliveryAddress.recipientName} ({request.deliveryAddress.mobileNumber})
+                    </span>
+                  </div>
+                  <div className="sm:col-span-2">
+                    <span className="text-[11.5px] font-bold text-gray-400 uppercase tracking-wider block">Delivery Address</span>
+                    <span className="text-[14.5px] font-semibold text-gray-700 mt-1 block leading-relaxed">
+                      {request.deliveryAddress.houseNumber}, {request.deliveryAddress.street}
+                      <br/>
+                      {request.deliveryAddress.landmark && <>{request.deliveryAddress.landmark}<br/></>}
+                      {request.deliveryAddress.village}, {request.deliveryAddress.district}
+                      <br/>
+                      {request.deliveryAddress.state} - {request.deliveryAddress.pinCode}
+                    </span>
+                  </div>
+                  {request.trackingId && (
+                    <div className="sm:col-span-2 bg-blue-50 border border-blue-100 rounded-xl p-4 flex items-center justify-between">
+                      <div>
+                        <span className="text-[11.5px] font-bold text-blue-600 uppercase tracking-wider block">Tracking ID</span>
+                        <span className="text-[16px] font-extrabold text-blue-900 mt-1 block tracking-wider">
+                          {request.trackingId}
+                        </span>
+                      </div>
+                      <svg style={{ width: '28px', height: '28px' }} className="text-blue-200" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                        <rect x="1" y="3" width="15" height="13"></rect>
+                        <polygon points="16 8 20 8 23 11 23 16 16 16 16 8"></polygon>
+                        <circle cx="5.5" cy="18.5" r="2.5"></circle>
+                        <circle cx="18.5" cy="18.5" r="2.5"></circle>
+                      </svg>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+            {/* Action Required: Correction Upload Block */}
+            {missingDocs.length > 0 && (
+              <div className="bg-red-50 rounded-2xl border border-red-200 shadow-sm p-6 mb-6">
+                <div className="flex items-start gap-4">
+                  <div className="h-12 w-12 rounded-full bg-red-100 flex items-center justify-center shrink-0">
+                    <svg style={{ width: '24px', height: '24px' }} className="text-red-600" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                      <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                      <line x1="12" y1="9" x2="12" y2="13" />
+                      <line x1="12" y1="17" x2="12.01" y2="17" />
+                    </svg>
+                  </div>
+                  <div className="flex-1">
+                    <h2 className="text-[18px] font-extrabold text-red-800">Action Required: Re-upload Documents</h2>
+                    <p className="text-[14px] font-medium text-red-700 mt-1 mb-4">
+                      The agent has requested corrections to your documents. Please review their notes in the tracking timeline and re-upload the required document below.
+                    </p>
+                    
+                    <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3">
+                      {missingDocs.map((docType) => (
+                        <label key={docType} className={`border border-red-300 hover:border-red-500 bg-white rounded-xl p-4 flex flex-col items-center justify-center text-center cursor-pointer transition-colors ${uploadingDoc ? 'opacity-50 pointer-events-none' : ''}`}>
+                          <span className="h-8 w-8 rounded-full bg-red-50 flex items-center justify-center text-red-600 mb-2">
+                            <svg style={{ width: '16px', height: '16px' }} fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                              <polyline points="17 8 12 3 7 8" />
+                              <line x1="12" y1="3" x2="12" y2="15" />
+                            </svg>
+                          </span>
+                          <span className="text-[13px] font-extrabold text-gray-800 block">
+                            {docType.replace('_', ' ').toUpperCase()}
+                          </span>
+                          <span className="text-[11px] font-bold text-gray-500 mt-1">Click to Upload</span>
+                          <input type="file" className="hidden" onChange={handleFileUpload(docType)} disabled={uploadingDoc} />
+                        </label>
+                      ))}
+                      <label className={`border border-red-300 hover:border-red-500 bg-white rounded-xl p-4 flex flex-col items-center justify-center text-center cursor-pointer transition-colors ${uploadingDoc ? 'opacity-50 pointer-events-none' : ''}`}>
+                        <span className="h-8 w-8 rounded-full bg-red-50 flex items-center justify-center text-red-600 mb-2">
+                          +
+                        </span>
+                        <span className="text-[13px] font-extrabold text-gray-800 block">
+                          OTHER PROOF
+                        </span>
+                        <span className="text-[11px] font-bold text-gray-500 mt-1">Click to Upload</span>
+                        <input type="file" className="hidden" onChange={handleFileUpload('additional_proof')} disabled={uploadingDoc} />
+                      </label>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Document Gallery Block */}
             <div className="bg-white rounded-2xl border border-[#e2e8f0] shadow-sm p-6 space-y-6">
               <div className="pb-4.5 border-b border-gray-100 flex items-center justify-between">
@@ -403,56 +667,66 @@ export default function RequestDetails() {
                     <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
                     <polyline points="14 2 14 8 20 8" />
                   </svg>
-                  Document Gallery
+                  My Uploaded Documents
                 </h2>
-                <span className="text-[12px] font-bold text-gray-400">{(request.documents || []).length} Documents Uploaded</span>
+                <span className="text-[12px] font-bold text-gray-400">{citizenDocs.length} Documents</span>
               </div>
 
               {/* Grid layout for files */}
               <div className="grid gap-4 sm:grid-cols-2">
-                {(request.documents || []).map((doc, idx) => (
-                  <div key={idx} className="border border-[#e2e8f0] rounded-xl p-4 flex items-center justify-between gap-3 shadow-sm hover:border-[#13448a] transition-colors relative">
-                    <div className="flex items-center gap-3">
-                      <div className="h-10 w-10 rounded-lg bg-gray-50 flex items-center justify-center text-[#13448a] border border-gray-100 shrink-0">
+                {citizenDocs.map((doc, idx) => (
+                  <div key={idx} className="border border-slate-200 rounded-xl p-4 flex items-center justify-between gap-3 shadow-sm hover:border-blue-600 transition-colors">
+                    <div className="flex items-center gap-3 min-w-0 flex-1">
+                      <div className="h-10 w-10 rounded-lg bg-slate-50 flex items-center justify-center text-blue-700 border border-slate-100 shrink-0">
                         <svg style={{ width: '18px', height: '18px' }} fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
                           <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
                         </svg>
                       </div>
-                      <div className="space-y-0.5">
-                        <span className="text-[13px] font-bold text-gray-800 block truncate max-w-[150px]" title={doc.originalName}>{doc.originalName}</span>
-                        <span className="text-[11px] text-gray-400 font-bold block">
+                      <div className="space-y-0.5 min-w-0 flex-1">
+                        <span className="text-sm font-bold text-gray-900 block truncate" title={doc.originalName}>{doc.originalName}</span>
+                        <span className="text-[11px] text-gray-400 font-bold block truncate tracking-wide">
                           {doc.documentType?.replace('_', ' ').toUpperCase() || "Proof"} • {new Date(doc.createdAt).toLocaleDateString()}
                         </span>
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-2">
-                      <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10.5px] font-extrabold uppercase ${
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
                         doc.status === "verified" 
-                          ? "bg-emerald-50 text-emerald-700" 
+                          ? "bg-emerald-50 text-emerald-700 border border-emerald-100" 
                           : doc.status === "rejected"
-                            ? "bg-red-50 text-red-700"
-                            : "bg-amber-50 text-amber-700"
+                            ? "bg-red-50 text-red-700 border border-red-100"
+                            : "bg-amber-50 text-amber-700 border border-amber-100"
                       }`}>
                         {doc.status}
                       </span>
-                      <a
-                        href={getUploadUrl(doc.filename)}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="h-8 w-8 rounded-lg hover:bg-gray-50 text-gray-450 hover:text-gray-700 flex items-center justify-center"
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          try {
+                            const res = await documentApi.downloadDocument(doc._id);
+                            window.open(res.data.data.url, '_blank');
+                          } catch (err) {
+                            if (err.response?.status === 404) {
+                              toast.error("Document file not found on server. Please re-upload it.");
+                            } else {
+                              toast.error("Failed to load document");
+                            }
+                          }
+                        }}
+                        className="h-8 w-8 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 flex items-center justify-center transition-colors"
                       >
-                        <svg style={{ width: '15px', height: '15px' }} fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                        <svg style={{ width: '16px', height: '16px' }} fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
                           <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
                           <polyline points="7 10 12 15 17 10" />
                         </svg>
-                      </a>
+                      </button>
                     </div>
                   </div>
                 ))}
 
                 {/* Add Document upload box card */}
-                {['draft', 'submitted', 'assigned', 'in_progress', 'documents_required'].includes(request.status) && (
+                {['draft', 'submitted', 'assigned', 'under_review', 'correction_required'].includes(request.status) && (
                   <label className={`border-2 border-dashed border-gray-200 hover:border-[#13448a] rounded-xl p-4 flex flex-col items-center justify-center text-center cursor-pointer transition-colors min-h-[72px] ${uploadingDoc ? 'opacity-55 pointer-events-none' : ''}`}>
                     <span className="h-7 w-7 rounded-full bg-gray-50 flex items-center justify-center text-[#13448a] border border-gray-100">
                       +
@@ -461,10 +735,71 @@ export default function RequestDetails() {
                       {uploadingDoc ? "Uploading..." : "Add New Document"}
                     </span>
                     <span className="text-[10px] font-bold text-gray-400 block">PDF, PNG, JPG (Max 5MB)</span>
-                    <input type="file" className="hidden" onChange={handleFileUpload} disabled={uploadingDoc} />
+                    <input type="file" className="hidden" onChange={handleFileUpload('additional_proof')} disabled={uploadingDoc} />
                   </label>
                 )}
               </div>
+
+              {agentDocs.length > 0 && (
+                <div className="mt-8">
+                  <div className="pb-4.5 border-b border-gray-100 flex items-center justify-between mb-4">
+                    <h2 className="text-[17px] font-extrabold text-[#13448a] flex items-center gap-2">
+                      <svg style={{ width: '18px', height: '18px' }} fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                        <path d="M12 11v6" />
+                        <path d="M9 14h6" />
+                      </svg>
+                      Agent Uploaded Documents
+                    </h2>
+                    <span className="text-[12px] font-bold text-gray-400">{agentDocs.length} Documents</span>
+                  </div>
+
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    {agentDocs.map((doc, idx) => (
+                      <div key={`agent-${idx}`} className="border border-blue-100 bg-blue-50/30 rounded-xl p-4 flex items-center justify-between gap-3 shadow-sm hover:border-blue-300 transition-colors">
+                        <div className="flex items-center gap-3 min-w-0 flex-1">
+                          <div className="h-10 w-10 rounded-lg bg-blue-100 flex items-center justify-center text-blue-700 border border-blue-200 shrink-0">
+                            <svg style={{ width: '18px', height: '18px' }} fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                              <circle cx="12" cy="14" r="3" />
+                            </svg>
+                          </div>
+                          <div className="space-y-0.5 min-w-0 flex-1">
+                            <span className="text-sm font-bold text-gray-900 block truncate" title={doc.title || doc.originalName}>{doc.title || doc.originalName}</span>
+                            <span className="text-[11px] text-blue-600 font-bold block truncate tracking-wide">
+                              {doc.documentType?.replace('_', ' ').toUpperCase() || "DOCUMENT"} • {new Date(doc.createdAt).toLocaleDateString()}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2 shrink-0">
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              try {
+                                const res = await documentApi.downloadDocument(doc._id);
+                                window.open(res.data.data.url, '_blank');
+                              } catch (err) {
+                                if (err.response?.status === 404) {
+                                  toast.error("Document file not found on server.");
+                                } else {
+                                  toast.error("Failed to load document");
+                                }
+                              }
+                            }}
+                            className="h-8 w-8 rounded-lg bg-white border border-blue-200 hover:bg-blue-100 text-blue-600 flex items-center justify-center transition-colors"
+                          >
+                            <svg style={{ width: '16px', height: '16px' }} fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                              <polyline points="7 10 12 15 17 10" />
+                            </svg>
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {request.status === 'documents_required' && (
                 <div className="flex gap-2.5 rounded-xl bg-red-50/55 p-4 border border-red-100 text-[12.5px] font-semibold text-red-800 leading-normal">

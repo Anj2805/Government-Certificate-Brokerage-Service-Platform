@@ -20,10 +20,40 @@ router.get(
 );
 
 router.get(
+  '/analytics',
+  authorizePermission(Permissions.ADMIN_DASHBOARD),
+  adminController.getAnalytics,
+);
+
+router.get(
+  '/search',
+  authorizePermission(Permissions.ADMIN_DASHBOARD),
+  adminController.globalSearch,
+);
+
+router.get(
+  '/users',
+  authorizePermission(Permissions.ADMIN_DASHBOARD), // Assuming ADMIN_DASHBOARD covers user viewing for now, or maybe create a specific permission
+  adminController.listUsers,
+);
+
+router.get(
+  '/users/:id',
+  authorizePermission(Permissions.ADMIN_DASHBOARD),
+  adminController.getUserDetails,
+);
+
+router.get(
   '/agents',
   authorizePermission(Permissions.AGENT_VIEW),
   validateRequest(adminValidation.listAgents),
   adminController.listAgents,
+);
+
+router.get(
+  '/agents/:id',
+  authorizePermission(Permissions.AGENT_VIEW),
+  adminController.getAgentDetails,
 );
 
 router.patch(
@@ -31,6 +61,20 @@ router.patch(
   authorizePermission(Permissions.AGENT_VERIFY),
   validateRequest(adminValidation.approveAgent),
   adminController.approveAgent,
+);
+
+router.patch(
+  '/agents/:id/background',
+  authorizePermission(Permissions.AGENT_VERIFY),
+  validateRequest(adminValidation.updateAgentBackground),
+  adminController.updateAgentBackground,
+);
+
+router.patch(
+  '/agents/:id/department',
+  authorizePermission(Permissions.AGENT_VERIFY),
+  validateRequest(adminValidation.updateAgentDepartment),
+  adminController.updateAgentDepartment,
 );
 
 router.patch(

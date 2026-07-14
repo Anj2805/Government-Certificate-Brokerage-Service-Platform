@@ -1,5 +1,6 @@
 const nodemailer = require('nodemailer');
 const config = require('../config');
+const logger = require('../config/logger');
 
 const capturedMessages = [];
 const capturedVerificationMessages = [];
@@ -52,6 +53,7 @@ const sendPasswordResetEmail = async ({ to, resetUrl, expiresInMinutes }) => {
   });
 
   if (!config.isProduction) {
+    logger.info({ resetUrl, to }, 'Development Mode: Password Reset Link Generated');
     capturedMessages.push({
       to,
       resetUrl,
@@ -87,6 +89,7 @@ const sendEmailVerificationEmail = async ({ to, verificationUrl, expiresInHours 
   });
 
   if (!config.isProduction) {
+    logger.info({ verificationUrl, to }, 'Development Mode: Email Verification Link Generated');
     capturedVerificationMessages.push({
       to,
       verificationUrl,

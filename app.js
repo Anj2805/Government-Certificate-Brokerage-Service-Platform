@@ -1,4 +1,5 @@
 const express = require('express');
+const path = require('path');
 const config = require('./src/config');
 const routes = require('./src/api/v1/routes');
 const { errorHandler, notFoundHandler } = require('./src/middlewares/error.middleware');
@@ -18,6 +19,8 @@ app.use(express.urlencoded({ extended: true, limit: config.urlencodedBodyLimit }
 app.use(securityMiddleware.afterBodyParser);
 app.use(requestLogger);
 app.use('/api-docs', swaggerMiddleware.serve, swaggerMiddleware.setup);
+
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 app.get('/', (_req, res) => {
   res.status(200).json({

@@ -95,11 +95,23 @@ const resendVerification = asyncHandler(async (req, res) => {
   });
 });
 
+const verifyTwoFactor = asyncHandler(async (req, res) => {
+  const result = await authService.verifyTwoFactor(req.body);
+  ApiResponse.success(res, { data: result });
+});
+
+const setupTwoFactor = asyncHandler(async (req, res) => {
+  const result = await authService.setupTwoFactor(req.body);
+  ApiResponse.success(res, { data: result });
+});
+
 module.exports = {
   changePassword,
   forgotPassword,
   getCurrentUser,
   login,
+  verifyTwoFactor,
+  setupTwoFactor,
   logout,
   refreshToken,
   register,

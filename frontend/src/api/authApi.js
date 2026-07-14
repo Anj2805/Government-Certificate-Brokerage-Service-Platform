@@ -37,4 +37,12 @@ export const authApi = {
     const { data } = await httpClient.post('/auth/resend-verification', payload);
     return data;
   },
+  async verify2FA(payload) {
+    const { data } = await httpClient.post('/auth/2fa/verify', payload);
+    return data.data;
+  },
+  async setup2FA(payload) {
+    const { data } = await httpClient.post('/auth/2fa/setup', payload);
+    return data.data;
+  },
 };

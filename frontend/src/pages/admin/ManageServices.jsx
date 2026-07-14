@@ -1,5 +1,8 @@
 import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
+import { PATHS } from '../../config/paths';
 import { serviceApi } from '../../api/serviceApi';
+import toast from 'react-hot-toast';
 
 export default function ManageServices() {
   const [services, setServices] = useState([]);
@@ -18,7 +21,7 @@ export default function ManageServices() {
       setServices(response.data?.services || []);
     } catch (err) {
       console.error(err);
-      alert('Failed to fetch services');
+      toast.error('Failed to fetch services');
     } finally {
       setIsLoading(false);
     }
@@ -32,10 +35,11 @@ export default function ManageServices() {
   const [formData, setFormData] = useState({
     id: "",
     name: "",
-    department: "Revenue Department",
+    category: "Central Services",
     estimatedTime: "",
     fee: "",
     desc: "",
+    requiredDocs: "",
     status: "Active"
   });
 
@@ -43,11 +47,13 @@ export default function ManageServices() {
     setFormData({
       id: "SRV-0" + (services.length + 1),
       name: "",
-      department: "Revenue Department",
+      category: "Central Services",
       estimatedTime: "",
       fee: "",
       desc: "",
-      status: "Active"
+      requiredDocs: "",
+      status: "Active",
+      requiresIdVerification: false
     });
     setShowAddModal(true);
   };
@@ -60,28 +66,30 @@ export default function ManageServices() {
   const handleAddSubmit = async (e) => {
     e.preventDefault();
     if (!formData.name || !formData.estimatedTime || !formData.fee) {
-      alert("Please fill all required fields.");
+      toast.error("Please fill all required fields.");
       return;
     }
     const baseFee = parseFloat(formData.fee.replace('₹', ''));
     if (isNaN(baseFee)) {
-      alert("Please enter a valid numeric fee.");
+      toast.error("Please enter a valid numeric fee.");
       return;
     }
 
     try {
       await serviceApi.createService({
         name: formData.name,
-        department: formData.department,
-        estimatedProcessingDays: parseInt(formData.estimatedTime.split('-')[0]) || 5, // Fallback parsing
-        baseFee,
+        category: formData.category,
+        estimatedProcessingDays: parseInt(formData.estimatedTime.split('-')[0]) || 5, 
+        serviceCharge: baseFee,
         description: formData.desc,
+        requiredDocuments: formData.requiredDocs ? formData.requiredDocs.split(',').map(d => d.trim()).filter(Boolean) : ['Standard Proof'],
+        requiresIdVerification: formData.requiresIdVerification || false,
       });
       setShowAddModal(false);
       fetchServices();
-      alert(`Successfully created new service: "${formData.name}"`);
+      toast.success(`Successfully created new service: "${formData.name}"`);
     } catch (err) {
-      alert(err?.response?.data?.message || 'Failed to create service');
+      toast.error(err?.response?.data?.message || 'Failed to create service');
     }
   };
 
@@ -92,16 +100,18 @@ export default function ManageServices() {
     try {
       await serviceApi.updateService(formData._id, {
         name: formData.name,
-        department: formData.department,
+        category: formData.category,
         estimatedProcessingDays: parseInt(formData.estimatedTime.toString().split('-')[0]) || 5,
-        baseFee,
+        serviceCharge: baseFee,
         description: formData.desc,
+        requiredDocuments: formData.requiredDocs ? formData.requiredDocs.split(',').map(d => d.trim()).filter(Boolean) : ['Standard Proof'],
+        requiresIdVerification: formData.requiresIdVerification || false,
       });
       setShowEditModal(false);
       fetchServices();
-      alert(`Successfully updated service: "${formData.name}"`);
+      toast.success(`Successfully updated service: "${formData.name}"`);
     } catch (err) {
-      alert(err?.response?.data?.message || 'Failed to update service');
+      toast.error(err?.response?.data?.message || 'Failed to update service');
     }
   };
 
@@ -110,16 +120,16 @@ export default function ManageServices() {
       const newStatus = !srv.isActive;
       await serviceApi.setActiveStatus(srv._id, newStatus);
       fetchServices();
-      alert(`Service status for "${srv.name}" changed to ${newStatus ? 'Active' : 'Inactive'}`);
+      toast.success(`Service status for "${srv.name}" changed to ${newStatus ? 'Active' : 'Inactive'}`);
     } catch (err) {
-      alert(err?.response?.data?.message || 'Failed to toggle status');
+      toast.error(err?.response?.data?.message || 'Failed to toggle status');
     }
   };
 
   // Filter list
   const filteredServices = services.filter(srv => {
     const matchesSearch = srv.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          srv.department.toLowerCase().includes(searchTerm.toLowerCase());
+                          (srv.category || '').toLowerCase().includes(searchTerm.toLowerCase());
 
     const srvStatus = srv.isActive ? "Active" : "Inactive";
     const matchesStatus = statusFilter === "All" || srvStatus === statusFilter;
@@ -131,34 +141,34 @@ export default function ManageServices() {
       <div className="max-w-[1344px] w-full mx-auto px-6 py-8 flex-1 space-y-8">
 
         {/* Title Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div>
-            <h1 className="text-[28px] font-extrabold text-[#0f294a] tracking-tight">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-gradient-to-r from-[#13448a] to-[#1e58b0] rounded-3xl p-8 text-white shadow-xl relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-64 h-64 bg-white opacity-5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/3"></div>
+          <div className="relative z-10">
+            <h1 className="text-3xl font-extrabold tracking-tight">
               Manage Government Services
             </h1>
-            <p className="text-[14.5px] text-gray-500 font-semibold mt-0.5">
-              Configure the catalog of public services and certificates available to citizens.
+            <p className="text-blue-100 font-medium mt-2 max-w-xl text-sm leading-relaxed">
+              Configure the catalog of public services and certificates available to citizens. Add new services, set processing fees, and manage status seamlessly.
             </p>
           </div>
 
           <button
             onClick={handleOpenAdd}
-            className="h-11 px-5 rounded-lg bg-[#13448a] hover:bg-[#0c316a] text-[13.5px] font-bold text-white shadow-sm transition-colors flex items-center gap-1.5"
+            className="relative z-10 h-12 px-6 rounded-xl bg-white text-[#13448a] text-[14px] font-bold shadow-lg hover:shadow-xl hover:-translate-y-0.5 hover:bg-blue-50 transition-all duration-300 flex items-center gap-2 group"
           >
-            <svg style={{ width: '16px', height: '16px' }} fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
-              <circle cx="12" cy="12" r="10" />
-              <line x1="12" y1="8" x2="12" y2="16" />
-              <line x1="8" y1="12" x2="16" y2="12" />
+            <svg style={{ width: '18px', height: '18px' }} className="transition-transform group-hover:rotate-90" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+              <line x1="12" y1="5" x2="12" y2="19" />
+              <line x1="5" y1="12" x2="19" y2="12" />
             </svg>
-            Add Service
+            Add New Service
           </button>
         </div>
 
         {/* Filter and Search Bar */}
-        <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
-          <div className="relative flex-1 max-w-md">
-            <span className="absolute inset-y-0 left-0 flex items-center pl-3.5 pointer-events-none text-gray-400">
-              <svg style={{ width: '16px', height: '16px' }} fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+        <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4 bg-white/80 backdrop-blur-md p-4 rounded-2xl shadow-sm border border-slate-200/60">
+          <div className="relative flex-1 max-w-lg group">
+            <span className="absolute inset-y-0 left-0 flex items-center pl-4 pointer-events-none text-slate-400 group-focus-within:text-[#13448a] transition-colors">
+              <svg style={{ width: '18px', height: '18px' }} fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
                 <circle cx="11" cy="11" r="8" />
                 <line x1="21" y1="21" x2="16.65" y2="16.65" />
               </svg>
@@ -168,7 +178,7 @@ export default function ManageServices() {
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               placeholder="Search services or departments..."
-              className="w-full h-11 pl-10 pr-4 rounded-lg bg-white border border-[#e2e8f0] focus:ring-2 focus:ring-[#13448a] focus:border-[#13448a] text-[13.5px] font-semibold text-gray-700 placeholder-gray-400 transition-all outline-none"
+              className="w-full h-12 pl-12 pr-4 rounded-xl bg-slate-50/50 border border-slate-200 focus:ring-2 focus:ring-[#13448a]/20 focus:border-[#13448a] text-[14px] font-medium text-slate-700 placeholder-slate-400 transition-all outline-none hover:bg-white"
             />
           </div>
 
@@ -229,9 +239,9 @@ export default function ManageServices() {
                         <span className="font-extrabold text-gray-800 block">{srv.name}</span>
                         <span className="text-[11.5px] text-gray-400 font-bold block mt-0.5 max-w-sm truncate">{srv.description}</span>
                       </td>
-                      <td className="px-6 py-4.5 text-gray-700">{srv.department}</td>
+                      <td className="px-6 py-4.5 text-gray-700">{srv.category || 'N/A'}</td>
                       <td className="px-6 py-4.5 text-gray-500">{srv.estimatedProcessingDays} Days</td>
-                      <td className="px-6 py-4.5 font-bold text-gray-800">₹{srv.baseFee}</td>
+                      <td className="px-6 py-4.5 font-bold text-gray-800">₹{srv.serviceCharge || 0}</td>
                       <td className="px-6 py-4.5">
                         <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10.5px] font-extrabold border ${
                           srv.isActive
@@ -241,33 +251,43 @@ export default function ManageServices() {
                           {srv.isActive ? "Active" : "Inactive"}
                         </span>
                       </td>
-                      <td className="px-6 py-4.5 text-right space-x-2 shrink-0">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setFormData({
-                              ...srv,
-                              desc: srv.description,
-                              fee: srv.baseFee.toString(),
-                              estimatedTime: srv.estimatedProcessingDays.toString(),
-                            });
-                            setShowEditModal(true);
-                          }}
-                          className="h-8 px-3 rounded border border-[#e2e8f0] hover:border-[#13448a] hover:bg-[#13448a]/5 text-[11.5px] font-bold text-gray-700 hover:text-[#13448a] transition-all"
-                        >
-                          Edit Details
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleToggleStatus(srv)}
-                          className={`h-8 px-3 rounded border text-[11.5px] font-bold transition-all ${
-                            srv.isActive
-                              ? "border-red-150 hover:bg-red-50 text-red-600 hover:border-red-300"
-                              : "border-emerald-150 hover:bg-emerald-50 text-emerald-600 hover:border-emerald-300"
-                          }`}
-                        >
-                          {srv.isActive ? "Deactivate" : "Activate"}
-                        </button>
+                      <td className="px-6 py-4.5 text-right shrink-0 whitespace-nowrap">
+                        <div className="flex items-center justify-end gap-2">
+                          <Link
+                            to={PATHS.SERVICE_DETAILS.replace(':id', srv._id)}
+                            className="h-8 px-3 rounded border border-[#e2e8f0] hover:border-[#13448a] hover:bg-[#13448a]/5 text-[11.5px] font-bold text-gray-700 hover:text-[#13448a] transition-all inline-flex items-center justify-center"
+                          >
+                            View
+                          </Link>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setFormData({
+                                ...srv,
+                                desc: srv.description || '',
+                                category: srv.category || 'Central Services',
+                                fee: (srv.serviceCharge || 0).toString(),
+                                estimatedTime: (srv.estimatedProcessingDays || 5).toString(),
+                                requiredDocs: (srv.requiredDocuments || []).join(', ')
+                              });
+                              setShowEditModal(true);
+                            }}
+                            className="h-8 px-3 rounded border border-[#e2e8f0] hover:border-[#13448a] hover:bg-[#13448a]/5 text-[11.5px] font-bold text-gray-700 hover:text-[#13448a] transition-all"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleToggleStatus(srv)}
+                            className={`h-8 px-3 rounded border text-[11.5px] font-bold transition-all ${
+                              srv.isActive
+                                ? "border-red-150 hover:bg-red-50 text-red-600 hover:border-red-300"
+                                : "border-emerald-150 hover:bg-emerald-50 text-emerald-600 hover:border-emerald-300"
+                            }`}
+                          >
+                            {srv.isActive ? "Deactivate" : "Activate"}
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))
@@ -347,6 +367,17 @@ export default function ManageServices() {
               </div>
 
               <div>
+                <label className="block text-[12px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">Required Documents</label>
+                <textarea
+                  value={formData.requiredDocs}
+                  onChange={(e) => setFormData({ ...formData, requiredDocs: e.target.value })}
+                  placeholder="e.g. Identity Proof, Address Proof, Recent Photograph (comma separated)"
+                  rows="2"
+                  className="w-full p-3 rounded-lg border border-gray-200 text-gray-700 focus:ring-2 focus:ring-[#13448a] focus:border-[#13448a] outline-none"
+                />
+              </div>
+
+              <div>
                 <label className="block text-[12px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">Description</label>
                 <textarea
                   value={formData.desc}
@@ -356,6 +387,19 @@ export default function ManageServices() {
                   className="w-full p-3 rounded-lg border border-gray-200 text-gray-700 focus:ring-2 focus:ring-[#13448a] focus:border-[#13448a] outline-none"
                 />
               </div>
+
+              <label className="flex items-start gap-3 cursor-pointer">
+                <input 
+                  type="checkbox" 
+                  checked={formData.requiresIdVerification}
+                  onChange={(e) => setFormData({ ...formData, requiresIdVerification: e.target.checked })}
+                  className="mt-1 h-4 w-4 rounded border-gray-300 text-[#13448a] focus:ring-[#13448a]" 
+                />
+                <div>
+                  <span className="block text-[12px] font-bold text-gray-700 uppercase tracking-wider">High Security Service</span>
+                  <span className="block text-[11px] text-gray-500 font-medium">Requires citizens to have a verified ID Proof to apply.</span>
+                </div>
+              </label>
 
               <div className="pt-2 flex gap-3">
                 <button
@@ -400,12 +444,13 @@ export default function ManageServices() {
               </div>
 
               <div>
-                <label className="block text-[12px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">Department</label>
+                <label className="block text-[12px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">Department / Category</label>
                 <select
-                  value={formData.department}
-                  onChange={(e) => setFormData({ ...formData, department: e.target.value })}
+                  value={formData.category}
+                  onChange={(e) => setFormData({ ...formData, category: e.target.value })}
                   className="w-full h-11 px-3.5 rounded-lg border border-gray-200 text-gray-700 focus:ring-2 focus:ring-[#13448a] focus:border-[#13448a]"
                 >
+                  <option value="Central Services">Central Services</option>
                   <option value="Revenue Department">Revenue Department</option>
                   <option value="Health & Family Welfare">Health & Family Welfare</option>
                   <option value="Social Justice & Empowerment">Social Justice & Empowerment</option>
@@ -439,6 +484,17 @@ export default function ManageServices() {
               </div>
 
               <div>
+                <label className="block text-[12px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">Required Documents</label>
+                <textarea
+                  value={formData.requiredDocs}
+                  onChange={(e) => setFormData({ ...formData, requiredDocs: e.target.value })}
+                  placeholder="e.g. Identity Proof, Address Proof, Recent Photograph (comma separated)"
+                  rows="2"
+                  className="w-full p-3 rounded-lg border border-gray-200 text-gray-700 focus:ring-2 focus:ring-[#13448a] focus:border-[#13448a] outline-none"
+                />
+              </div>
+
+              <div>
                 <label className="block text-[12px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">Description</label>
                 <textarea
                   value={formData.desc}
@@ -448,6 +504,19 @@ export default function ManageServices() {
                   className="w-full p-3 rounded-lg border border-gray-200 text-gray-700 focus:ring-2 focus:ring-[#13448a] focus:border-[#13448a] outline-none"
                 />
               </div>
+
+              <label className="flex items-start gap-3 cursor-pointer">
+                <input 
+                  type="checkbox" 
+                  checked={formData.requiresIdVerification}
+                  onChange={(e) => setFormData({ ...formData, requiresIdVerification: e.target.checked })}
+                  className="mt-1 h-4 w-4 rounded border-gray-300 text-[#13448a] focus:ring-[#13448a]" 
+                />
+                <div>
+                  <span className="block text-[12px] font-bold text-gray-700 uppercase tracking-wider">High Security Service</span>
+                  <span className="block text-[11px] text-gray-500 font-medium">Requires citizens to have a verified ID Proof to apply.</span>
+                </div>
+              </label>
 
               <div className="pt-2 flex gap-3">
                 <button

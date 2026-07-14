@@ -25,6 +25,8 @@ async function seedUsers() {
   // 2. Agents
   const agentDocs = [];
   for (const agent of AGENTS) {
+    const isApproved = agent.agentStatus === AgentStatus.APPROVED;
+    const isHighPerf = agent.scenarioType === 'HIGH_PERFORMANCE';
     const doc = await User.findOneAndUpdate(
       { email: agent.email },
       {
@@ -34,18 +36,22 @@ async function seedUsers() {
         isActive: true,
         emailVerified: true,
         emailVerifiedAt: new Date(),
-        agentStatus: AgentStatus.APPROVED,
-        agentReviewedAt: new Date(),
-        agentIdentifier: `AGT-${Date.now().toString().slice(-6)}-${Math.floor(Math.random()*1000)}`
+        agentStatus: agent.agentStatus || AgentStatus.APPROVED,
+        agentReviewedAt: isApproved ? new Date() : undefined,
+        agentIdentifier: `AGT-${Date.now().toString().slice(-6)}-${Math.floor(Math.random()*1000)}`,
+        profilePhoto: isHighPerf ? 'https://ui-avatars.com/api/?name=' + agent.firstName + '+' + agent.lastName + '&background=random' : undefined
       },
       { upsert: true, new: true }
     );
+    doc.scenarioType = agent.scenarioType;
+    doc.purpose = agent.purpose;
     agentDocs.push(doc);
   }
 
   // 3. Citizens
   const citizenDocs = [];
   for (const citizen of CITIZENS) {
+    const isExperienced = citizen.scenarioType === 'EXPERIENCED_ACTIVE';
     const doc = await User.findOneAndUpdate(
       { email: citizen.email },
       {
@@ -55,9 +61,15 @@ async function seedUsers() {
         isActive: true,
         emailVerified: true,
         emailVerifiedAt: new Date(),
+        phone: citizen.phone,
+        profilePhoto: isExperienced ? 'https://ui-avatars.com/api/?name=' + citizen.firstName + '+' + citizen.lastName + '&background=random' : undefined,
+        idProofStatus: isExperienced ? 'verified' : 'unverified',
+        idProofVerifiedAt: isExperienced ? new Date() : undefined
       },
       { upsert: true, new: true }
     );
+    doc.scenarioType = citizen.scenarioType;
+    doc.purpose = citizen.purpose;
     citizenDocs.push(doc);
   }
 

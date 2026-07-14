@@ -2,10 +2,12 @@ const RequestStatus = Object.freeze({
   DRAFT: 'draft',
   SUBMITTED: 'submitted',
   ASSIGNED: 'assigned',
-  IN_PROGRESS: 'in_progress',
-  DOCUMENTS_REQUIRED: 'documents_required',
-  COMPLETED: 'completed',
+  UNDER_REVIEW: 'under_review',
+  CORRECTION_REQUIRED: 'correction_required',
+  RESUBMITTED: 'resubmitted',
+  APPROVED: 'approved',
   REJECTED: 'rejected',
+  COMPLETED: 'completed',
   CANCELLED: 'cancelled',
 });
 

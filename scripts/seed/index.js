@@ -68,20 +68,11 @@ Generated At: ${new Date().toISOString()}
 
 All seeded accounts use the password: \`Abcd@123\`
 
-### Admin
-| Name | Email | Scenario |
-|------|-------|----------|
-| Demo Admin | admin.demo@sevasetu.example | Full dashboard analytics and settings access |
-
-### Agents
-| Name | Email | Designation |
-|------|-------|-------------|
-${data.agents.map(a => `| ${a.firstName} ${a.lastName} | ${a.email} | ${a.designation} |`).join('\n')}
-
-### Citizens
-| Name | Email | Note |
-|------|-------|------|
-${data.citizens.map(c => `| ${c.firstName} ${c.lastName} | ${c.email} | Diverse workflow stages |`).join('\n')}
+| Role | Persona Name | Login Email | Password | Primary Demo Purpose | Best Pages to Demonstrate | Important Current State |
+|------|--------------|-------------|----------|----------------------|---------------------------|-------------------------|
+| Admin | Demo Admin | admin.demo@sevasetu.example | Abcd@123 | Demonstrate the complete operational platform | Dashboard, Analytics, Manage Users | Full access, analytics populated |
+${data.agents.map(a => `| Agent | ${a.firstName} ${a.lastName} | ${a.email} | Abcd@123 | ${a.purpose} | Agent Dashboard, Assigned Requests | Assigned: ${a.scenarioType} |`).join('\n')}
+${data.citizens.map(c => `| Citizen | ${c.firstName} ${c.lastName} | ${c.email} | Abcd@123 | ${c.purpose} | Dashboard, My Requests, Tracking | Status: ${c.scenarioType} |`).join('\n')}
 
 `;
 

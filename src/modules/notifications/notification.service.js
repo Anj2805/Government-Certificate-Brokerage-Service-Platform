@@ -7,6 +7,16 @@ const MAX_LIMIT = 100;
 
 const buildNotificationContent = (type) => {
   switch (type) {
+    case NotificationType.ACCOUNT_CREATED:
+      return {
+        title: 'Welcome to SevaSetu',
+        message: 'Your SevaSetu account has been created successfully. Please verify your email to activate all account features.',
+      };
+    case NotificationType.AGENT_APPROVED:
+      return {
+        title: 'Account Approved',
+        message: 'Your Agent account has been approved by an Administrator.',
+      };
     case NotificationType.REQUEST_SUBMITTED:
       return {
         title: 'Request Submitted',
@@ -42,6 +52,16 @@ const buildNotificationContent = (type) => {
         title: 'Request Cancelled',
         message: 'Your service request has been cancelled.',
       };
+    case NotificationType.ID_PROOF_VERIFIED:
+      return {
+        title: 'ID Verification Successful',
+        message: 'Your ID proof has been verified and your account is now fully active.',
+      };
+    case NotificationType.ID_PROOF_REJECTED:
+      return {
+        title: 'ID Verification Failed',
+        message: 'Your ID proof was rejected or missing. Please re-upload a valid ID document from your profile.',
+      };
     default:
       return {
         title: 'Update on Your Request',
@@ -50,19 +70,22 @@ const buildNotificationContent = (type) => {
   }
 };
 
-const createRequestNotification = async ({ recipientId, requestId, type, eventId, metadata = {} }) => {
+const createNotification = async ({ recipientId, type, eventId, requestId = null, title: customTitle, message: customMessage, metadata = {} }) => {
   try {
-    const { title, message } = buildNotificationContent(type);
+    const defaultContent = buildNotificationContent(type);
+    const title = customTitle || defaultContent.title;
+    const message = customMessage || defaultContent.message;
     
     // Identity must distinguish repeated legitimate events: requestId + type + eventId
-    const deduplicationKey = `${requestId}:${type}:${eventId}`;
+    const requestKey = requestId ? `${requestId}:` : '';
+    const deduplicationKey = `${requestKey}${type}:${eventId}`;
 
     await notificationRepository.createNotification({
       recipient: recipientId,
       type,
       title,
       message,
-      request: requestId,
+      ...(requestId && { request: requestId }),
       metadata,
       deduplicationKey,
     });
@@ -74,12 +97,12 @@ const createRequestNotification = async ({ recipientId, requestId, type, eventId
     if (recipient && recipient.email) {
       await jobService.enqueueOutboxEvent({
         eventType: type,
-        aggregateType: 'Request',
-        aggregateId: requestId,
-        idempotencyKey: `EXTERNAL_NOTIFICATION:${requestId}:${type}:${eventId}`,
+        aggregateType: requestId ? 'Request' : 'User',
+        aggregateId: requestId || recipientId,
+        idempotencyKey: `EXTERNAL_NOTIFICATION:${deduplicationKey}`,
         payload: {
           recipientId,
-          requestId,
+          ...(requestId && { requestId }),
           type,
           title,
           message,
@@ -110,6 +133,8 @@ const createRequestNotification = async ({ recipientId, requestId, type, eventId
     console.error('Failed to create notification', logData);
   }
 };
+// Aliased for backwards compatibility in other modules
+const createRequestNotification = createNotification;
 
 const listNotifications = async ({ recipientId, query }) => {
   const page = Math.max(1, parseInt(query.page) || DEFAULT_PAGE);
@@ -144,6 +169,7 @@ const markAllAsRead = async (recipientId) => {
 };
 
 module.exports = {
+  createNotification,
   createRequestNotification,
   listNotifications,
   getUnreadCount,

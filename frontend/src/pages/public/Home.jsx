@@ -1,9 +1,11 @@
-import { useState, useEffect } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { toast } from 'react-hot-toast';
+import { useState, useEffect, useRef } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 
 import { brandAssets } from '../../config/brandAssets';
 import { PATHS } from '../../config/paths';
 import { serviceApi } from '../../api/serviceApi';
+import { useAuth } from '../../hooks/useAuth';
 const steps = [
   {
     number: '01',
@@ -147,7 +149,77 @@ function BenefitItem({ item }) {
 
 export default function Home() {
   const { hash } = useLocation();
+  const navigate = useNavigate();
+  const { user, isAuthenticated, isBootstrapping } = useAuth();
+  
   const [dbServices, setDbServices] = useState([]);
+  
+  // Search state
+  const [searchQuery, setSearchQuery] = useState('');
+  const [showAutocomplete, setShowAutocomplete] = useState(false);
+  const [selectedIndex, setSelectedIndex] = useState(-1);
+  const searchRef = useRef(null);
+
+  // Filtered services for autocomplete
+  const autocompleteResults = dbServices.filter(s => 
+    s.name.toLowerCase().includes(searchQuery.toLowerCase().trim()) ||
+    (s.category && s.category.toLowerCase().includes(searchQuery.toLowerCase().trim()))
+  ).slice(0, 5);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (searchRef.current && !searchRef.current.contains(event.target)) {
+        setShowAutocomplete(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const handleSearchSubmit = (e) => {
+    e?.preventDefault();
+    const query = searchQuery.trim();
+    if (!query) return;
+
+    // Check for exact match in results
+    const exactMatch = autocompleteResults.find(s => s.name.toLowerCase() === query.toLowerCase());
+    if (exactMatch) {
+      handleSelectService(exactMatch);
+    } else {
+      navigate(`${PATHS.SERVICES}?search=${encodeURIComponent(query)}`);
+    }
+  };
+
+  const handleSelectService = (service) => {
+    setShowAutocomplete(false);
+    setSearchQuery(service.name);
+    
+    if (user?.role === 'citizen') {
+      navigate(`${PATHS.CITIZEN_CREATE_REQUEST}?serviceId=${service._id}`);
+    } else {
+      navigate(PATHS.SERVICE_DETAILS.replace(':id', service._id));
+    }
+  };
+
+  const handleKeyDown = (e) => {
+    if (!showAutocomplete || autocompleteResults.length === 0) return;
+    
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setSelectedIndex(prev => (prev < autocompleteResults.length - 1 ? prev + 1 : prev));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setSelectedIndex(prev => (prev > 0 ? prev - 1 : 0));
+    } else if (e.key === 'Enter') {
+      if (selectedIndex >= 0) {
+        e.preventDefault();
+        handleSelectService(autocompleteResults[selectedIndex]);
+      }
+    } else if (e.key === 'Escape') {
+      setShowAutocomplete(false);
+      setSelectedIndex(-1);
+    }
+  };
 
   useEffect(() => {
     if (hash) {
@@ -168,6 +240,7 @@ export default function Home() {
           setDbServices(response.data.services);
         }
       } catch (error) {
+        toast.error(error?.response?.data?.message || 'An error occurred');
         console.error("Failed to fetch services for homepage:", error);
       }
     };
@@ -209,25 +282,87 @@ export default function Home() {
               </p>
 
               {/* Search Bar */}
-              <form className="mt-8 flex w-full max-w-[580px] rounded-xl border border-[#cbd5e1] bg-white p-2 shadow-md focus-within:border-[#f58220] transition-colors" role="search">
-                <label htmlFor="service-search" className="sr-only">
-                  Search service
-                </label>
-                <div className="flex flex-1 items-center gap-3 px-3">
-                  <svg className="h-5 w-5 text-gray-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                  </svg>
-                  <input
-                    id="service-search"
-                    type="search"
-                    placeholder="Search for Income, Birth, or Caste certificates..."
-                    className="w-full border-0 bg-transparent text-[16px] font-medium text-[#111827] outline-none placeholder:text-[#94a3b8]"
-                  />
-                </div>
-                <button type="submit" className="rounded-lg bg-[#f58220] px-6 py-3.5 text-[15px] font-bold text-white hover:bg-[#e07216] transition-colors shadow-sm shrink-0">
-                  Search Service
-                </button>
-              </form>
+              <div className="relative mt-8" ref={searchRef}>
+                <form 
+                  onSubmit={handleSearchSubmit}
+                  className="flex w-full max-w-[580px] rounded-xl border border-[#cbd5e1] bg-white p-2 shadow-md focus-within:border-[#f58220] transition-colors" 
+                  role="search"
+                >
+                  <label htmlFor="service-search" className="sr-only">
+                    Search service
+                  </label>
+                  <div className="flex flex-1 items-center gap-3 px-3">
+                    <svg className="h-5 w-5 text-gray-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                    </svg>
+                    <input
+                      id="service-search"
+                      type="search"
+                      placeholder="Search for Income, Birth, or Caste certificates..."
+                      value={searchQuery}
+                      onChange={(e) => {
+                        setSearchQuery(e.target.value);
+                        setShowAutocomplete(true);
+                        setSelectedIndex(-1);
+                      }}
+                      onFocus={() => {
+                        if (searchQuery.trim()) setShowAutocomplete(true);
+                      }}
+                      onKeyDown={handleKeyDown}
+                      className="w-full border-0 bg-transparent text-[16px] font-medium text-[#111827] outline-none placeholder:text-[#94a3b8]"
+                      autoComplete="off"
+                    />
+                  </div>
+                  <button type="submit" className="rounded-lg bg-[#f58220] px-6 py-3.5 text-[15px] font-bold text-white hover:bg-[#e07216] transition-colors shadow-sm shrink-0">
+                    Search Service
+                  </button>
+                </form>
+
+                {/* Autocomplete Dropdown */}
+                {showAutocomplete && searchQuery.trim() && (
+                  <div className="absolute top-full left-0 right-0 mt-2 max-w-[580px] bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden z-50">
+                    {autocompleteResults.length > 0 ? (
+                      <ul className="py-2" role="listbox">
+                        {autocompleteResults.map((service, index) => (
+                          <li 
+                            key={service._id}
+                            role="option"
+                            aria-selected={index === selectedIndex}
+                            className={`px-4 py-3 cursor-pointer flex items-center justify-between transition-colors ${index === selectedIndex ? 'bg-blue-50' : 'hover:bg-gray-50'}`}
+                            onClick={() => handleSelectService(service)}
+                            onMouseEnter={() => setSelectedIndex(index)}
+                          >
+                            <div className="flex flex-col">
+                              <span className="text-[14.5px] font-bold text-gray-900">{service.name}</span>
+                              {service.category && (
+                                <span className="text-[12px] font-medium text-gray-500">{service.category}</span>
+                              )}
+                            </div>
+                            {(service.processingTimeDays || service.fee) && (
+                              <div className="flex flex-col items-end gap-0.5 shrink-0">
+                                {service.processingTimeDays && (
+                                  <span className="text-[11px] font-bold text-[#0066cc] bg-[#e8efff] px-2 py-0.5 rounded-full">
+                                    {service.processingTimeDays} Days
+                                  </span>
+                                )}
+                                {service.fee !== undefined && (
+                                  <span className="text-[11px] font-bold text-gray-500">
+                                    ₹{service.fee}
+                                  </span>
+                                )}
+                              </div>
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <div className="px-4 py-4 text-center">
+                        <p className="text-[14px] font-medium text-gray-500">No services found matching "{searchQuery}"</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
 
               {/* Stats pills */}
               <div className="mt-10 flex flex-wrap gap-4">
@@ -467,20 +602,79 @@ export default function Home() {
       </section>
 
       <section className="bg-white px-6 py-24">
-        <div className="mx-auto max-w-[1178px] rounded-md bg-[#153f70] px-6 py-20 text-center text-white shadow-[0_28px_45px_rgba(0,0,0,0.25)]">
-          <h2 className="text-[44px] font-extrabold leading-tight">Ready to Get Started?</h2>
-          <p className="mx-auto mt-6 max-w-[570px] text-[16px] font-medium leading-relaxed text-white">
-            Register to browse available services, upload documents, and track your requests.
-          </p>
-          <div className="mt-9 flex flex-col justify-center gap-4 sm:flex-row">
-            <Link to={PATHS.REGISTER} className="rounded-md bg-[#f58220] px-11 py-4 text-[15px] font-extrabold text-black no-underline">
-              Create Free Account
-            </Link>
-            <Link to={PATHS.LOGIN} className="rounded-md bg-white px-11 py-4 text-[15px] font-bold text-black no-underline">
-              Login to Portal
-            </Link>
-          </div>
-          <p className="mt-7 text-[13px] italic text-white/75">* Service availability and processing depend on configured catalog rules.</p>
+        <div className="mx-auto max-w-[1178px] rounded-md bg-[#153f70] px-6 py-20 text-center text-white shadow-[0_28px_45px_rgba(0,0,0,0.25)] min-h-[300px] flex flex-col justify-center">
+          {isBootstrapping ? (
+            <div className="animate-pulse">
+              <div className="h-10 w-64 bg-white/10 rounded mx-auto mb-6"></div>
+              <div className="h-4 w-96 bg-white/10 rounded mx-auto mb-9"></div>
+              <div className="h-12 w-48 bg-white/10 rounded mx-auto"></div>
+            </div>
+          ) : isAuthenticated && user ? (
+            <>
+              {user.role === 'citizen' ? (
+                <>
+                  <h2 className="text-[44px] font-extrabold leading-tight">Continue Managing Your Services</h2>
+                  <p className="mx-auto mt-6 max-w-[570px] text-[16px] font-medium leading-relaxed text-white">
+                    Access your citizen dashboard to track existing requests or discover new services in the catalog.
+                  </p>
+                  <div className="mt-9 flex flex-col justify-center gap-4 sm:flex-row">
+                    <Link to={PATHS.SERVICES} className="rounded-md bg-[#f58220] px-11 py-4 text-[15px] font-extrabold text-black no-underline transition-transform hover:-translate-y-0.5">
+                      Browse Services
+                    </Link>
+                    <Link to={PATHS.CITIZEN_REQUESTS} className="rounded-md bg-white px-11 py-4 text-[15px] font-bold text-black no-underline transition-transform hover:-translate-y-0.5">
+                      View My Requests
+                    </Link>
+                  </div>
+                </>
+              ) : user.role === 'agent' ? (
+                <>
+                  <h2 className="text-[44px] font-extrabold leading-tight">Continue Managing Assigned Requests</h2>
+                  <p className="mx-auto mt-6 max-w-[570px] text-[16px] font-medium leading-relaxed text-white">
+                    Access your agent dashboard to process document verifications and manage citizen service requests.
+                  </p>
+                  <div className="mt-9 flex flex-col justify-center gap-4 sm:flex-row">
+                    <Link to={PATHS.AGENT_ASSIGNED_REQUESTS} className="rounded-md bg-[#f58220] px-11 py-4 text-[15px] font-extrabold text-black no-underline transition-transform hover:-translate-y-0.5">
+                      View Assigned Requests
+                    </Link>
+                    <Link to={PATHS.AGENT_DASHBOARD} className="rounded-md bg-white px-11 py-4 text-[15px] font-bold text-black no-underline transition-transform hover:-translate-y-0.5">
+                      Open Dashboard
+                    </Link>
+                  </div>
+                </>
+              ) : user.role === 'admin' ? (
+                <>
+                  <h2 className="text-[44px] font-extrabold leading-tight">Continue Managing SevaSetu</h2>
+                  <p className="mx-auto mt-6 max-w-[570px] text-[16px] font-medium leading-relaxed text-white">
+                    Access the administrative console to manage services, system agents, and oversee platform requests.
+                  </p>
+                  <div className="mt-9 flex flex-col justify-center gap-4 sm:flex-row">
+                    <Link to={PATHS.ADMIN_DASHBOARD} className="rounded-md bg-[#f58220] px-11 py-4 text-[15px] font-extrabold text-black no-underline transition-transform hover:-translate-y-0.5">
+                      Open Admin Dashboard
+                    </Link>
+                    <Link to={PATHS.ADMIN_SERVICES} className="rounded-md bg-white px-11 py-4 text-[15px] font-bold text-black no-underline transition-transform hover:-translate-y-0.5">
+                      Manage Services
+                    </Link>
+                  </div>
+                </>
+              ) : null}
+            </>
+          ) : (
+            <>
+              <h2 className="text-[44px] font-extrabold leading-tight">Ready to Get Started?</h2>
+              <p className="mx-auto mt-6 max-w-[570px] text-[16px] font-medium leading-relaxed text-white">
+                Register to browse available services, upload documents, and track your requests.
+              </p>
+              <div className="mt-9 flex flex-col justify-center gap-4 sm:flex-row">
+                <Link to={PATHS.REGISTER} className="rounded-md bg-[#f58220] px-11 py-4 text-[15px] font-extrabold text-black no-underline transition-transform hover:-translate-y-0.5">
+                  Create Free Account
+                </Link>
+                <Link to={PATHS.LOGIN} className="rounded-md bg-white px-11 py-4 text-[15px] font-bold text-black no-underline transition-transform hover:-translate-y-0.5">
+                  Login to Portal
+                </Link>
+              </div>
+              <p className="mt-7 text-[13px] italic text-white/75">* Service availability and processing depend on configured catalog rules.</p>
+            </>
+          )}
         </div>
       </section>
 

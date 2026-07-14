@@ -93,6 +93,16 @@ const deleteDocument = asyncHandler(async (req, res) => {
 const downloadDocument = asyncHandler(async (req, res) => {
   const { document, strategy } = await documentService.downloadDocument(req.params.id, req.user);
 
+  if (req.query.json === 'true') {
+    return ApiResponse.success(res, {
+      message: 'Download strategy fetched',
+      data: {
+        url: strategy.url || strategy.physicalPath,
+        type: strategy.type,
+      }
+    });
+  }
+
   if (strategy.type === 'redirect') {
     return res.redirect(strategy.url);
   } else if (strategy.type === 'local') {

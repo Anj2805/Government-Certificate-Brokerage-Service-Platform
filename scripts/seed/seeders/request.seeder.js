@@ -6,32 +6,39 @@ const PaymentStatus = require('../../../src/common/enums/payment-status.enum');
 const UserRoles = require('../../../src/common/enums/user-roles.enum');
 const crypto = require('crypto');
 
-// Scenarios mapping exactly to the plan
+// Map specific Agent personas to specific Citizen personas
 const SCENARIOS = [
-  { citizenIndex: 0, type: 'COMPLETED_FREE', count: 2 },
-  { citizenIndex: 0, type: 'COMPLETED_COD', count: 1 },
-  { citizenIndex: 0, type: 'UNDER_REVIEW', count: 1 },
+  // 1. Experienced Active Citizen (Aarav) - 2 completed free, 1 completed COD, 1 under review (Assigned to High Perf Agent)
+  { scenarioType: 'EXPERIENCED_ACTIVE', requestType: 'COMPLETED_FREE', count: 2, agentScenario: 'HIGH_PERFORMANCE' },
+  { scenarioType: 'EXPERIENCED_ACTIVE', requestType: 'COMPLETED_COD', count: 1, agentScenario: 'HIGH_PERFORMANCE' },
+  { scenarioType: 'EXPERIENCED_ACTIVE', requestType: 'UNDER_REVIEW', count: 1, agentScenario: 'HIGH_PERFORMANCE' },
   
-  { citizenIndex: 1, type: 'UNDER_REVIEW', count: 1 },
-  { citizenIndex: 1, type: 'CORRECTION_REQUIRED', count: 1 },
+  // 2. Correction Workflow Citizen (Meera) - Assigned to Correction Agent
+  { scenarioType: 'CORRECTION_WORKFLOW', requestType: 'CORRECTION_REQUIRED', count: 1, agentScenario: 'CORRECTION_AGENT' },
   
-  { citizenIndex: 2, type: 'APPROVED', count: 1 },
-  { citizenIndex: 2, type: 'READY_FOR_DISPATCH', count: 1 },
+  // 3. New User / Empty State (Rohan) - No requests
   
-  { citizenIndex: 3, type: 'IN_TRANSIT', count: 1 },
+  // 4. Application Under Review (Kavya) - Assigned to Document Verification Specialist
+  { scenarioType: 'UNDER_REVIEW', requestType: 'UNDER_REVIEW', count: 1, agentScenario: 'DOCUMENT_VERIFICATION' },
   
-  { citizenIndex: 4, type: 'OUT_FOR_DELIVERY_COD', count: 1 },
+  // 5. Approved / Ready for Dispatch (Arjun) - Assigned to Document Verification Specialist
+  { scenarioType: 'APPROVED_READY', requestType: 'READY_FOR_DISPATCH', count: 1, agentScenario: 'DOCUMENT_VERIFICATION' },
   
-  { citizenIndex: 5, type: 'COMPLETED_FREE', count: 1 },
+  // 6. Document in Transit (Ishita) - Assigned to Low Workload Agent
+  { scenarioType: 'IN_TRANSIT', requestType: 'IN_TRANSIT', count: 1, agentScenario: 'LOW_WORKLOAD' },
   
-  { citizenIndex: 6, type: 'REJECTED', count: 1 },
-  { citizenIndex: 6, type: 'COMPLETED_PAID', count: 1 }, // Already paid offline
+  // 7. Out for Delivery / COD Due (Vivek) - Assigned to High Performance Agent
+  { scenarioType: 'OUT_FOR_DELIVERY', requestType: 'OUT_FOR_DELIVERY_COD', count: 1, agentScenario: 'HIGH_PERFORMANCE' },
   
-  { citizenIndex: 7, type: 'UNDER_REVIEW_RISK', count: 1 },
+  // 8. High-Risk / Manual Review (Nisha) - Assigned to Admin / No specific agent
+  { scenarioType: 'HIGH_RISK', requestType: 'UNDER_REVIEW_RISK', count: 1, agentScenario: 'UNASSIGNED' },
   
-  { citizenIndex: 8, type: 'DELIVERY_FAILED', count: 1 },
+  // 9. Failed Delivery / Recipient Not Present (Aditya) - Assigned to High Performance Agent
+  { scenarioType: 'FAILED_DELIVERY', requestType: 'DELIVERY_FAILED', count: 1, agentScenario: 'HIGH_PERFORMANCE' },
   
-  // Citizen 9 is empty state (no requests)
+  // 10. Rejected Application with History (Priya) - 1 Rejected, 1 Completed Paid
+  { scenarioType: 'REJECTED_HISTORY', requestType: 'REJECTED', count: 1, agentScenario: 'DOCUMENT_VERIFICATION' },
+  { scenarioType: 'REJECTED_HISTORY', requestType: 'COMPLETED_PAID', count: 1, agentScenario: 'HIGH_PERFORMANCE' },
 ];
 
 function getRandomPastDate(daysAgoStart, daysAgoEnd) {
@@ -58,26 +65,24 @@ async function seedRequests(citizens, agents, services, admin) {
   let requestCounter = 1000;
 
   for (const scenario of SCENARIOS) {
-    const citizen = citizens[scenario.citizenIndex];
+    const citizen = citizens.find(c => c.scenarioType === scenario.scenarioType);
     if (!citizen) continue;
+
+    const agent = agents.find(a => a.scenarioType === scenario.agentScenario);
 
     for (let i = 0; i < scenario.count; i++) {
       requestCounter++;
       
-      // Select a matching service type based on scenario
       let service;
-      if (scenario.type.includes('FREE')) {
+      if (scenario.requestType.includes('FREE')) {
         service = services.find(s => s.serviceCharge === 0);
-      } else if (scenario.type.includes('COD') || scenario.type.includes('PAID')) {
+      } else if (scenario.requestType.includes('COD') || scenario.requestType.includes('PAID')) {
         service = services.find(s => s.serviceCharge > 0);
       } else {
         service = services[Math.floor(Math.random() * services.length)];
       }
 
       if (!service) service = services[0];
-
-      // Assign an agent deterministically or randomly
-      const agent = agents[requestCounter % agents.length];
 
       let reqStatus = RequestStatus.DRAFT;
       let payStatus = service.serviceCharge > 0 ? PaymentStatus.DUE : PaymentStatus.NOT_REQUIRED;
@@ -89,9 +94,13 @@ async function seedRequests(citizens, agents, services, admin) {
       
       const requestNumber = `REQ-${new Date(createDate).getFullYear()}-${requestCounter}`;
       
-      let isCOD = scenario.type.includes('COD');
+      let isCOD = scenario.requestType.includes('COD');
 
-      if (scenario.type.includes('COMPLETED')) {
+      const adminId = admin._id;
+      const citizenId = citizen._id;
+      const agentId = agent ? agent._id : undefined;
+
+      if (scenario.requestType.includes('COMPLETED')) {
         reqStatus = RequestStatus.COMPLETED;
         delStatus = DeliveryStatus.DELIVERED;
         if (service.serviceCharge > 0) payStatus = PaymentStatus.PAID;
@@ -99,65 +108,70 @@ async function seedRequests(citizens, agents, services, admin) {
         assignedAt = new Date(createDate.getTime() + 86400000);
         completedAt = new Date(createDate.getTime() + 86400000 * 5);
         history.push(
-          { fromStatus: RequestStatus.DRAFT, toStatus: RequestStatus.SUBMITTED, changedBy: citizen._id, changedByRole: UserRoles.CITIZEN, changedAt: submittedAt },
-          { fromStatus: RequestStatus.SUBMITTED, toStatus: RequestStatus.ASSIGNED, changedBy: admin._id, changedByRole: UserRoles.ADMIN, changedAt: assignedAt },
-          { fromStatus: RequestStatus.ASSIGNED, toStatus: RequestStatus.UNDER_REVIEW, changedBy: agent._id, changedByRole: UserRoles.AGENT, changedAt: new Date(assignedAt.getTime() + 10000) },
-          { fromStatus: RequestStatus.UNDER_REVIEW, toStatus: RequestStatus.APPROVED, changedBy: agent._id, changedByRole: UserRoles.AGENT, changedAt: new Date(assignedAt.getTime() + 86400000) },
-          { fromStatus: RequestStatus.APPROVED, toStatus: RequestStatus.COMPLETED, changedBy: agent._id, changedByRole: UserRoles.AGENT, changedAt: completedAt }
+          { fromStatus: RequestStatus.DRAFT, toStatus: RequestStatus.SUBMITTED, changedBy: citizenId, changedByRole: UserRoles.CITIZEN, changedAt: submittedAt },
+          { fromStatus: RequestStatus.SUBMITTED, toStatus: RequestStatus.ASSIGNED, changedBy: adminId, changedByRole: UserRoles.ADMIN, changedAt: assignedAt },
+          { fromStatus: RequestStatus.ASSIGNED, toStatus: RequestStatus.UNDER_REVIEW, changedBy: agentId, changedByRole: UserRoles.AGENT, changedAt: new Date(assignedAt.getTime() + 10000) },
+          { fromStatus: RequestStatus.UNDER_REVIEW, toStatus: RequestStatus.APPROVED, changedBy: agentId, changedByRole: UserRoles.AGENT, changedAt: new Date(assignedAt.getTime() + 86400000) },
+          { fromStatus: RequestStatus.APPROVED, toStatus: RequestStatus.COMPLETED, changedBy: agentId, changedByRole: UserRoles.AGENT, changedAt: completedAt }
         );
-      } else if (scenario.type === 'UNDER_REVIEW' || scenario.type === 'UNDER_REVIEW_RISK') {
+      } else if (scenario.requestType === 'UNDER_REVIEW' || scenario.requestType === 'UNDER_REVIEW_RISK') {
         reqStatus = RequestStatus.UNDER_REVIEW;
         submittedAt = createDate;
         assignedAt = new Date(createDate.getTime() + 3600000);
         history.push(
-          { fromStatus: RequestStatus.DRAFT, toStatus: RequestStatus.SUBMITTED, changedBy: citizen._id, changedByRole: UserRoles.CITIZEN, changedAt: submittedAt },
-          { fromStatus: RequestStatus.SUBMITTED, toStatus: RequestStatus.ASSIGNED, changedBy: admin._id, changedByRole: UserRoles.ADMIN, changedAt: assignedAt },
-          { fromStatus: RequestStatus.ASSIGNED, toStatus: RequestStatus.UNDER_REVIEW, changedBy: agent._id, changedByRole: UserRoles.AGENT, changedAt: new Date(assignedAt.getTime() + 10000) }
+          { fromStatus: RequestStatus.DRAFT, toStatus: RequestStatus.SUBMITTED, changedBy: citizenId, changedByRole: UserRoles.CITIZEN, changedAt: submittedAt }
         );
-      } else if (scenario.type === 'CORRECTION_REQUIRED') {
+        
+        if (agentId) {
+          history.push(
+            { fromStatus: RequestStatus.SUBMITTED, toStatus: RequestStatus.ASSIGNED, changedBy: adminId, changedByRole: UserRoles.ADMIN, changedAt: assignedAt },
+            { fromStatus: RequestStatus.ASSIGNED, toStatus: RequestStatus.UNDER_REVIEW, changedBy: agentId, changedByRole: UserRoles.AGENT, changedAt: new Date(assignedAt.getTime() + 10000) }
+          );
+        }
+      } else if (scenario.requestType === 'CORRECTION_REQUIRED') {
         reqStatus = RequestStatus.CORRECTION_REQUIRED;
         submittedAt = createDate;
         assignedAt = new Date(createDate.getTime() + 3600000);
         history.push(
-          { fromStatus: RequestStatus.DRAFT, toStatus: RequestStatus.SUBMITTED, changedBy: citizen._id, changedByRole: UserRoles.CITIZEN, changedAt: submittedAt },
-          { fromStatus: RequestStatus.SUBMITTED, toStatus: RequestStatus.ASSIGNED, changedBy: admin._id, changedByRole: UserRoles.ADMIN, changedAt: assignedAt },
-          { fromStatus: RequestStatus.ASSIGNED, toStatus: RequestStatus.UNDER_REVIEW, changedBy: agent._id, changedByRole: UserRoles.AGENT, changedAt: new Date(assignedAt.getTime() + 10000) },
-          { fromStatus: RequestStatus.UNDER_REVIEW, toStatus: RequestStatus.CORRECTION_REQUIRED, changedBy: agent._id, changedByRole: UserRoles.AGENT, reason: "Address proof is blurry.", changedAt: new Date(assignedAt.getTime() + 86400000) }
+          { fromStatus: RequestStatus.DRAFT, toStatus: RequestStatus.SUBMITTED, changedBy: citizenId, changedByRole: UserRoles.CITIZEN, changedAt: submittedAt },
+          { fromStatus: RequestStatus.SUBMITTED, toStatus: RequestStatus.ASSIGNED, changedBy: adminId, changedByRole: UserRoles.ADMIN, changedAt: assignedAt },
+          { fromStatus: RequestStatus.ASSIGNED, toStatus: RequestStatus.UNDER_REVIEW, changedBy: agentId, changedByRole: UserRoles.AGENT, changedAt: new Date(assignedAt.getTime() + 10000) },
+          { fromStatus: RequestStatus.UNDER_REVIEW, toStatus: RequestStatus.CORRECTION_REQUIRED, changedBy: agentId, changedByRole: UserRoles.AGENT, reason: "Address proof is blurry and unreadable.", changedAt: new Date(assignedAt.getTime() + 86400000) }
         );
-      } else if (scenario.type === 'REJECTED') {
+      } else if (scenario.requestType === 'REJECTED') {
         reqStatus = RequestStatus.REJECTED;
         submittedAt = createDate;
         assignedAt = new Date(createDate.getTime() + 3600000);
         rejectedAt = new Date(createDate.getTime() + 86400000 * 2);
         history.push(
-          { fromStatus: RequestStatus.DRAFT, toStatus: RequestStatus.SUBMITTED, changedBy: citizen._id, changedByRole: UserRoles.CITIZEN, changedAt: submittedAt },
-          { fromStatus: RequestStatus.SUBMITTED, toStatus: RequestStatus.ASSIGNED, changedBy: admin._id, changedByRole: UserRoles.ADMIN, changedAt: assignedAt },
-          { fromStatus: RequestStatus.ASSIGNED, toStatus: RequestStatus.UNDER_REVIEW, changedBy: agent._id, changedByRole: UserRoles.AGENT, changedAt: new Date(assignedAt.getTime() + 10000) },
-          { fromStatus: RequestStatus.UNDER_REVIEW, toStatus: RequestStatus.REJECTED, changedBy: agent._id, changedByRole: UserRoles.AGENT, reason: "Incomplete application details and false documents.", changedAt: rejectedAt }
+          { fromStatus: RequestStatus.DRAFT, toStatus: RequestStatus.SUBMITTED, changedBy: citizenId, changedByRole: UserRoles.CITIZEN, changedAt: submittedAt },
+          { fromStatus: RequestStatus.SUBMITTED, toStatus: RequestStatus.ASSIGNED, changedBy: adminId, changedByRole: UserRoles.ADMIN, changedAt: assignedAt },
+          { fromStatus: RequestStatus.ASSIGNED, toStatus: RequestStatus.UNDER_REVIEW, changedBy: agentId, changedByRole: UserRoles.AGENT, changedAt: new Date(assignedAt.getTime() + 10000) },
+          { fromStatus: RequestStatus.UNDER_REVIEW, toStatus: RequestStatus.REJECTED, changedBy: agentId, changedByRole: UserRoles.AGENT, reason: "Incomplete application details and invalid supporting documents.", changedAt: rejectedAt }
         );
-      } else if (scenario.type === 'READY_FOR_DISPATCH' || scenario.type === 'APPROVED') {
+      } else if (scenario.requestType === 'READY_FOR_DISPATCH') {
         reqStatus = RequestStatus.APPROVED;
         delStatus = DeliveryStatus.READY_FOR_DISPATCH;
         submittedAt = createDate;
         assignedAt = new Date(createDate.getTime() + 3600000);
         history.push(
-          { fromStatus: RequestStatus.DRAFT, toStatus: RequestStatus.SUBMITTED, changedBy: citizen._id, changedByRole: UserRoles.CITIZEN, changedAt: submittedAt },
-          { fromStatus: RequestStatus.SUBMITTED, toStatus: RequestStatus.ASSIGNED, changedBy: admin._id, changedByRole: UserRoles.ADMIN, changedAt: assignedAt },
-          { fromStatus: RequestStatus.ASSIGNED, toStatus: RequestStatus.UNDER_REVIEW, changedBy: agent._id, changedByRole: UserRoles.AGENT, changedAt: new Date(assignedAt.getTime() + 10000) },
-          { fromStatus: RequestStatus.UNDER_REVIEW, toStatus: RequestStatus.APPROVED, changedBy: agent._id, changedByRole: UserRoles.AGENT, changedAt: new Date(assignedAt.getTime() + 86400000) }
+          { fromStatus: RequestStatus.DRAFT, toStatus: RequestStatus.SUBMITTED, changedBy: citizenId, changedByRole: UserRoles.CITIZEN, changedAt: submittedAt },
+          { fromStatus: RequestStatus.SUBMITTED, toStatus: RequestStatus.ASSIGNED, changedBy: adminId, changedByRole: UserRoles.ADMIN, changedAt: assignedAt },
+          { fromStatus: RequestStatus.ASSIGNED, toStatus: RequestStatus.UNDER_REVIEW, changedBy: agentId, changedByRole: UserRoles.AGENT, changedAt: new Date(assignedAt.getTime() + 10000) },
+          { fromStatus: RequestStatus.UNDER_REVIEW, toStatus: RequestStatus.APPROVED, changedBy: agentId, changedByRole: UserRoles.AGENT, changedAt: new Date(assignedAt.getTime() + 86400000) }
         );
-      } else if (scenario.type === 'IN_TRANSIT') {
+      } else if (scenario.requestType === 'IN_TRANSIT') {
         reqStatus = RequestStatus.APPROVED;
         delStatus = DeliveryStatus.IN_TRANSIT;
         submittedAt = createDate;
         assignedAt = new Date(createDate.getTime() + 3600000);
-      } else if (scenario.type === 'OUT_FOR_DELIVERY_COD') {
+      } else if (scenario.requestType === 'OUT_FOR_DELIVERY_COD') {
         reqStatus = RequestStatus.APPROVED;
         delStatus = DeliveryStatus.OUT_FOR_DELIVERY;
         payStatus = PaymentStatus.COD_DUE;
         submittedAt = createDate;
         assignedAt = new Date(createDate.getTime() + 3600000);
-      } else if (scenario.type === 'DELIVERY_FAILED') {
+      } else if (scenario.requestType === 'DELIVERY_FAILED') {
         reqStatus = RequestStatus.APPROVED;
         delStatus = DeliveryStatus.DELIVERY_ATTEMPTED;
         submittedAt = createDate;
@@ -168,7 +182,7 @@ async function seedRequests(citizens, agents, services, admin) {
       const reqDoc = await Request.findOneAndUpdate(
         { requestNumber },
         {
-          citizen: citizen._id,
+          citizen: citizenId,
           service: service._id,
           applicantSnapshot: {
             firstName: citizen.firstName,
@@ -187,7 +201,7 @@ async function seedRequests(citizens, agents, services, admin) {
             serviceCharge: service.serviceCharge,
             requiredDocuments: service.requiredDocuments
           },
-          assignedAgent: assignedAt ? agent._id : undefined,
+          assignedAgent: agentId,
           status: reqStatus,
           paymentStatus: payStatus,
           paymentMethod: isCOD ? 'CASH_ON_DELIVERY' : undefined,
@@ -210,7 +224,10 @@ async function seedRequests(citizens, agents, services, admin) {
           assignedAt,
           completedAt,
           rejectedAt,
-          createdAt: createDate
+          createdAt: createDate,
+          
+          // Add notes if this is a high risk scenario
+          notes: scenario.requestType === 'UNDER_REVIEW_RISK' ? 'Requires manual verification by Admin due to mismatched documents. Previous applications were rejected for similar reasons.' : undefined
         },
         { upsert: true, new: true }
       );
@@ -221,7 +238,7 @@ async function seedRequests(citizens, agents, services, admin) {
         const payment = await Payment.findOneAndUpdate(
           { request: reqDoc._id },
           {
-            citizen: citizen._id,
+            citizen: citizenId,
             service: service._id,
             paymentType: isCOD ? 'CASH_ON_DELIVERY' : 'OFFLINE',
             paymentMethod: isCOD ? 'CASH' : 'SERVICE_CENTER',

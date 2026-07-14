@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { useNavigate } from 'react-router-dom';
+import toast from 'react-hot-toast';
 import { authApi } from '../../api/authApi';
 import { PATHS } from '../../config/paths';
 import { useAuth } from '../../hooks/useAuth';
@@ -33,7 +34,9 @@ export default function ChangePassword() {
         state: { message: 'Password changed successfully. Please sign in again.' },
       });
     } catch (error) {
-      setErrorMessage(getApiMessage(error, 'Unable to change password.'));
+      const msg = getApiMessage(error, 'Unable to change password.');
+      setErrorMessage(msg);
+      toast.error(msg);
     }
   };
 

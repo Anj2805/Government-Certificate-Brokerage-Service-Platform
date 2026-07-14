@@ -1,5 +1,8 @@
 const crypto = require('crypto');
 const httpStatus = require('http-status');
+const speakeasy = require('speakeasy');
+const qrcode = require('qrcode');
+const jwt = require('jsonwebtoken');
 const ApiError = require('../../common/errors/api-error');
 const config = require('../../config');
 const logger = require('../../config/logger');
@@ -60,6 +63,35 @@ const issueVerificationEmail = async (user) => {
   });
 };
 
+const sendMobileOtp = async (user, phone) => {
+  // Use user's existing phone or the provided one
+  const targetPhone = phone || user.phone;
+  if (!targetPhone) {
+    throw new ApiError(httpStatus.BAD_REQUEST, 'A mobile number is required to send OTP');
+  }
+
+  // Generate a random 6-digit OTP
+  const otp = Math.floor(100000 + Math.random() * 900000).toString();
+  
+  // Set expiry to 10 minutes from now
+  const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+
+  user.mobileOtp = otp;
+  user.mobileOtpExpiresAt = expiresAt;
+  
+  // Update phone if it was newly provided
+  if (phone && !user.phone) {
+    user.phone = phone;
+  }
+  
+  await user.save();
+
+  // Mock SMS delivery for testing (would use Twilio/SNS in production)
+  logger.info(`[MOCK SMS] Sending OTP ${otp} to ${targetPhone}`);
+  
+  return { otp, targetPhone }; // Returning OTP for development purposes
+};
+
 const buildAuthPayload = async (user) => {
   const accessToken = signAccessToken(user);
   const refreshToken = signRefreshToken(user);
@@ -104,25 +136,141 @@ const register = async (payload) => {
     userFields.agentStatus = AgentStatus.PENDING;
   } else {
     userFields.agentStatus = undefined;
+    userFields.address = payload.address;
+    userFields.city = payload.city;
+    userFields.state = payload.state;
+    userFields.postalCode = payload.postalCode;
   }
 
   const user = await User.create(userFields);
 
   await issueVerificationEmail(user);
 
+  // Trigger welcome notification
+  const notificationService = require('../notifications/notification.service');
+  const NotificationType = require('../../common/enums/notification-type.enum');
+  await notificationService.createNotification({
+    recipientId: user._id,
+    type: NotificationType.ACCOUNT_CREATED,
+    eventId: user._id.toString(),
+  });
+
   return buildAuthPayload(user);
 };
 
-const login = async ({ email, password }) => {
-  const user = await User.findOne({ email }).select('+password +refreshTokenHash');
+const login = async ({ email, password, role }) => {
+  const user = await User.findOne({ email }).select('+password +refreshTokenHash +twoFactorSecret');
 
-  if (!user || !(await comparePassword(password, user.password))) {
-    throw new ApiError(httpStatus.UNAUTHORIZED, 'Invalid email or password');
+  if (!user) {
+    throw new ApiError(httpStatus.UNAUTHORIZED, 'Account not found. Please register.');
+  }
+
+  if (!(await comparePassword(password, user.password))) {
+    throw new ApiError(httpStatus.UNAUTHORIZED, 'Invalid password. Please try again.');
   }
 
   if (!user.isActive) {
     throw new ApiError(httpStatus.FORBIDDEN, 'User account is inactive');
   }
+
+  if (role && user.role !== role) {
+    if (user.role === UserRoles.ADMIN) {
+      throw new ApiError(httpStatus.FORBIDDEN, 'Administrators must log in via the Admin portal.');
+    }
+    if (role === UserRoles.CITIZEN) {
+      throw new ApiError(httpStatus.FORBIDDEN, 'This email is registered as an Agent. Please select the Agent tab to log in.');
+    }
+    if (role === UserRoles.AGENT) {
+      throw new ApiError(httpStatus.FORBIDDEN, 'This email is registered as a Citizen. Please select the Citizen tab to log in.');
+    }
+    throw new ApiError(httpStatus.FORBIDDEN, `Incorrect role selected. This account is registered as ${user.role}.`);
+  }
+
+  if (user.role === UserRoles.AGENT) {
+    if (!user.emailVerified) {
+      throw new ApiError(httpStatus.FORBIDDEN, 'Email verification is required to access agent services.');
+    }
+    if (user.agentStatus === 'pending') {
+      throw new ApiError(httpStatus.FORBIDDEN, 'Your agent account application is pending administrator approval. Please wait for an administrator to review and approve your account.');
+    }
+    if (user.agentStatus === 'rejected') {
+      throw new ApiError(httpStatus.FORBIDDEN, 'Your agent account application was rejected.');
+    }
+    if (user.agentStatus === 'suspended') {
+      throw new ApiError(httpStatus.FORBIDDEN, 'Your agent account has been suspended.');
+    }
+  }
+
+  if (user.role === UserRoles.ADMIN) {
+    const tempToken = jwt.sign({ sub: user._id }, config.jwt.secret || 'temp_secret', { expiresIn: '5m' });
+    
+    if (!user.isTwoFactorEnabled) {
+      const secretData = speakeasy.generateSecret({ name: `SevaSetu Admin (${user.email})` });
+      const secret = secretData.base32;
+      user.twoFactorSecret = secret;
+      await user.save();
+      
+      const otpauth = secretData.otpauth_url;
+      const qrCode = await qrcode.toDataURL(otpauth);
+      
+      return {
+        requiresTwoFactorSetup: true,
+        tempToken,
+        qrCode,
+        secret
+      };
+    }
+    
+    return {
+      requiresTwoFactor: true,
+      tempToken
+    };
+  }
+
+  return buildAuthPayload(user);
+};
+
+const verifyTwoFactor = async ({ tempToken, totpToken }) => {
+  let decoded;
+  try {
+    decoded = jwt.verify(tempToken, config.jwt.secret || 'temp_secret');
+  } catch (err) {
+    throw new ApiError(httpStatus.UNAUTHORIZED, 'Session expired. Please log in again.');
+  }
+
+  const user = await User.findById(decoded.sub).select('+twoFactorSecret');
+  if (!user || !user.isTwoFactorEnabled || !user.twoFactorSecret) {
+    throw new ApiError(httpStatus.BAD_REQUEST, '2FA is not enabled for this user.');
+  }
+
+  const isValid = speakeasy.totp.verify({ token: totpToken, secret: user.twoFactorSecret, encoding: 'base32', window: 1 });
+  if (!isValid) {
+    throw new ApiError(httpStatus.UNAUTHORIZED, 'Invalid authentication code.');
+  }
+
+  return buildAuthPayload(user);
+};
+
+const setupTwoFactor = async ({ tempToken, totpToken }) => {
+  let decoded;
+  try {
+    decoded = jwt.verify(tempToken, config.jwt.secret || 'temp_secret');
+  } catch (err) {
+    throw new ApiError(httpStatus.UNAUTHORIZED, 'Session expired. Please log in again.');
+  }
+
+  const user = await User.findById(decoded.sub).select('+twoFactorSecret');
+  if (!user || !user.twoFactorSecret) {
+    throw new ApiError(httpStatus.BAD_REQUEST, '2FA setup was not initialized.');
+  }
+
+  const isValid = speakeasy.totp.verify({ token: totpToken, secret: user.twoFactorSecret, encoding: 'base32', window: 1 });
+  if (!isValid) {
+    throw new ApiError(httpStatus.UNAUTHORIZED, 'Invalid authentication code.');
+  }
+
+  user.isTwoFactorEnabled = true;
+  await user.save();
 
   return buildAuthPayload(user);
 };
@@ -300,6 +448,9 @@ const logout = async (userId) => {
 };
 
 module.exports = {
+  login,
+  verifyTwoFactor,
+  setupTwoFactor,
   getCurrentUser,
   changePassword,
   requestPasswordReset,
@@ -308,7 +459,6 @@ module.exports = {
   VERIFICATION_RESEND_MESSAGE,
   verifyEmail,
   resendVerificationEmail,
-  login,
   logout,
   refreshAccessToken,
   register,

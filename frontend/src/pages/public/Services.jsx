@@ -199,33 +199,49 @@ export default function Services() {
                 <p className="mt-4 text-[14.5px] text-gray-500 font-bold">Loading services catalog...</p>
               </div>
             ) : isError ? (
-              <div className="bg-white rounded-2xl border border-red-100 p-12 text-center shadow-sm">
-                <svg className="h-12 w-12 text-red-550 mx-auto" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
-                  <circle cx="12" cy="12" r="10" />
-                  <line x1="12" y1="8" x2="12" y2="12" />
-                  <line x1="12" y1="16" x2="12.01" y2="16" />
-                </svg>
-                <h3 className="text-[16px] font-extrabold text-[#0f294a] mt-4">Failed to Load Services</h3>
-                <p className="text-[13px] text-gray-500 font-medium mt-1">
-                  An error occurred while fetching the service catalog. Please check your connection and try again.
+              <div className="bg-[#f0f4fa]/30 border border-red-100 rounded-2xl p-16 text-center shadow-sm relative overflow-hidden flex flex-col items-center justify-center min-h-[350px]">
+                <div className="h-20 w-20 mx-auto rounded-3xl bg-red-50 text-red-500 flex items-center justify-center border border-red-100 shadow-sm transform -rotate-3 transition-transform hover:rotate-0 mb-6 relative z-10">
+                  <svg className="h-9 w-9" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+                    <circle cx="12" cy="12" r="10" />
+                    <line x1="12" y1="8" x2="12" y2="12" />
+                    <line x1="12" y1="16" x2="12.01" y2="16" />
+                  </svg>
+                </div>
+                <h3 className="text-[22px] font-extrabold text-[#0f294a] tracking-tight relative z-10">Failed to Load Services</h3>
+                <p className="text-[14.5px] text-gray-500 font-medium mt-2 max-w-sm mx-auto relative z-10">
+                  We encountered an issue while retrieving the service catalog. Please try again.
                 </p>
                 <button
                   onClick={fetchServices}
-                  className="mt-5 h-10 px-5 rounded-lg bg-[#13448a] hover:bg-[#0c316a] text-[13px] font-bold text-white transition-all shadow-md"
+                  className="mt-8 h-12 px-8 rounded-xl bg-[#13448a] hover:bg-[#0c316a] text-[14px] font-extrabold text-white shadow-md shadow-[#13448a]/20 transition-all hover:-translate-y-0.5 relative z-10 flex items-center justify-center gap-2"
                 >
-                  Retry
+                  Retry Loading
                 </button>
               </div>
             ) : displayedServices.length === 0 ? (
-              <div className="bg-white rounded-2xl border border-[#e2e8f0] p-12 text-center shadow-sm">
-                <svg className="h-12 w-12 text-gray-400 mx-auto" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
-                  <circle cx="11" cy="11" r="8" />
-                  <line x1="21" y1="21" x2="16.65" y2="16.65" />
-                </svg>
-                <h3 className="text-[16px] font-extrabold text-[#0f294a] mt-4">No Services Found</h3>
-                <p className="text-[13px] text-gray-500 font-medium mt-1">
-                  Try adjusting your search query or filter settings.
+              <div className="bg-gray-50/30 border border-[#dbeafe] rounded-2xl p-16 text-center shadow-sm relative overflow-hidden flex flex-col items-center justify-center min-h-[350px]">
+                <div className="h-20 w-20 mx-auto rounded-3xl bg-blue-50 text-[#13448a] flex items-center justify-center border border-blue-100 shadow-sm transform -rotate-3 transition-transform hover:rotate-0 mb-6 relative z-10">
+                  <svg className="h-9 w-9" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+                    <circle cx="11" cy="11" r="8" />
+                    <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                  </svg>
+                </div>
+                <h3 className="text-[20px] font-extrabold text-[#0f294a] tracking-tight relative z-10">No Services Found</h3>
+                <p className="text-[14.5px] text-gray-500 font-medium mt-2 max-w-sm mx-auto relative z-10">
+                  We couldn't find any services matching your search or filter settings.
                 </p>
+                {(searchTerm || priceRange < 5000) && (
+                  <button
+                    onClick={() => {
+                      setSearchTerm('');
+                      setPriceRange(5000);
+                      setCurrentPage(1);
+                    }}
+                    className="mt-6 text-[13.5px] font-bold text-[#13448a] hover:text-[#0c316a] hover:underline relative z-10"
+                  >
+                    Clear all filters
+                  </button>
+                )}
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">

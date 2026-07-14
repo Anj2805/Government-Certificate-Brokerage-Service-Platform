@@ -55,6 +55,20 @@ const createRequest = [
     .optional()
     .isMongoId()
     .withMessage('each document ID must be a valid MongoDB ObjectId'),
+  body('deliveryAddress')
+    .optional()
+    .isObject()
+    .withMessage('deliveryAddress must be an object'),
+  body('deliveryAddress.houseNumber').optional({ checkFalsy: true }).trim().notEmpty().withMessage('House number is required'),
+  body('deliveryAddress.street').optional({ checkFalsy: true }).trim().notEmpty().withMessage('Street is required'),
+  body('deliveryAddress.village').optional({ checkFalsy: true }).trim().notEmpty().withMessage('Village/Town/City is required'),
+  body('deliveryAddress.district').optional({ checkFalsy: true }).trim().notEmpty().withMessage('District is required'),
+  body('deliveryAddress.state').optional({ checkFalsy: true }).trim().notEmpty().withMessage('State is required'),
+  body('deliveryAddress.pinCode').optional({ checkFalsy: true }).trim().notEmpty().withMessage('PIN code is required'),
+  body('deliveryDeclarationAccepted')
+    .optional()
+    .isBoolean()
+    .withMessage('deliveryDeclarationAccepted must be a boolean'),
 ];
 
 const assignAgent = [
@@ -122,6 +136,30 @@ const attachDocument = [
   body('documentId').isMongoId().withMessage('documentId must be a valid MongoDB ObjectId'),
 ];
 
+const submitRequest = [
+  ...mongoIdParam,
+  body('deliveryDeclarationAccepted').optional().isBoolean(),
+  body('reason')
+    .optional({ nullable: true, checkFalsy: true })
+    .trim()
+    .isLength({ max: 500 })
+    .withMessage('reason must be at most 500 characters'),
+];
+
+const recordPayment = [
+  ...mongoIdParam,
+  body('amountPaid').isNumeric().withMessage('amountPaid must be a number'),
+  body('receiptNumber').notEmpty().withMessage('receiptNumber is required'),
+  body('collectionMethod').isIn(['Cash', 'UPI at Counter', 'Card at Counter', 'Other']).withMessage('Invalid collection method'),
+  body('notes').optional({ nullable: true }).isString().trim(),
+];
+
+const verifyDelivery = [
+  ...mongoIdParam,
+  body('verificationResult').isIn(['PASSED', 'FAILED', 'RECIPIENT_NOT_PRESENT']).withMessage('Invalid verification result'),
+  body('codCollected').optional().isBoolean().withMessage('codCollected must be a boolean'),
+];
+
 module.exports = {
   assignAgent,
   withdrawRequest,
@@ -132,6 +170,7 @@ module.exports = {
   rejectRequest,
   getRequest: mongoIdParam,
   listRequests: paginationQuery,
-  submitRequest: mongoIdParam,
+  submitRequest,
+  recordPayment,
   attachDocument,
 };

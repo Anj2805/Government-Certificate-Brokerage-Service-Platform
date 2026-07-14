@@ -20,18 +20,22 @@ const allowedTransitions = Object.freeze({
     RequestStatus.CANCELLED,
   ]),
   [RequestStatus.ASSIGNED]: Object.freeze([
-    RequestStatus.IN_PROGRESS,
-    RequestStatus.DOCUMENTS_REQUIRED,
+    RequestStatus.UNDER_REVIEW,
+    RequestStatus.CORRECTION_REQUIRED,
     RequestStatus.REJECTED,
   ]),
-  [RequestStatus.IN_PROGRESS]: Object.freeze([
-    RequestStatus.DOCUMENTS_REQUIRED,
+  [RequestStatus.UNDER_REVIEW]: Object.freeze([
+    RequestStatus.CORRECTION_REQUIRED,
+    RequestStatus.APPROVED,
     RequestStatus.COMPLETED,
     RequestStatus.REJECTED,
   ]),
-  [RequestStatus.DOCUMENTS_REQUIRED]: Object.freeze([
-    RequestStatus.IN_PROGRESS,
+  [RequestStatus.CORRECTION_REQUIRED]: Object.freeze([
+    RequestStatus.UNDER_REVIEW,
     RequestStatus.REJECTED,
+  ]),
+  [RequestStatus.APPROVED]: Object.freeze([
+    RequestStatus.COMPLETED,
   ]),
   [RequestStatus.COMPLETED]: Object.freeze([]),
   [RequestStatus.REJECTED]: Object.freeze([]),
@@ -47,24 +51,29 @@ const roleTransitions = Object.freeze({
     [RequestStatus.SUBMITTED]: Object.freeze([
       RequestStatus.CANCELLED,
     ]),
-    [RequestStatus.DOCUMENTS_REQUIRED]: Object.freeze([
-      RequestStatus.IN_PROGRESS,
+    [RequestStatus.CORRECTION_REQUIRED]: Object.freeze([
+      RequestStatus.UNDER_REVIEW,
+      RequestStatus.RESUBMITTED,
     ]),
   }),
   [UserRoles.AGENT]: Object.freeze({
     [RequestStatus.ASSIGNED]: Object.freeze([
-      RequestStatus.IN_PROGRESS,
-      RequestStatus.DOCUMENTS_REQUIRED,
+      RequestStatus.UNDER_REVIEW,
+      RequestStatus.CORRECTION_REQUIRED,
       RequestStatus.REJECTED,
     ]),
-    [RequestStatus.IN_PROGRESS]: Object.freeze([
-      RequestStatus.DOCUMENTS_REQUIRED,
+    [RequestStatus.UNDER_REVIEW]: Object.freeze([
+      RequestStatus.CORRECTION_REQUIRED,
+      RequestStatus.APPROVED,
       RequestStatus.COMPLETED,
       RequestStatus.REJECTED,
     ]),
-    [RequestStatus.DOCUMENTS_REQUIRED]: Object.freeze([
-      RequestStatus.IN_PROGRESS,
+    [RequestStatus.CORRECTION_REQUIRED]: Object.freeze([
+      RequestStatus.UNDER_REVIEW,
       RequestStatus.REJECTED,
+    ]),
+    [RequestStatus.APPROVED]: Object.freeze([
+      RequestStatus.COMPLETED,
     ]),
   }),
   [UserRoles.ADMIN]: allowedTransitions,

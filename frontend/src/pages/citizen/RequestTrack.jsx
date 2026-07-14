@@ -1,3 +1,4 @@
+import { toast } from 'react-hot-toast';
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { PATHS } from '../../config/paths';
@@ -19,7 +20,8 @@ export default function RequestTrack() {
       const data = await requestApi.getRequestDetails(id);
       setRequest(data);
     } catch (err) {
-      console.error(err);
+      toast.error(err?.response?.data?.message || 'An error occurred');
+        console.error(err);
       setIsError(true);
     } finally {
       setIsLoading(false);
@@ -124,12 +126,12 @@ export default function RequestTrack() {
       isActive: request.status === 'assigned'
     },
     {
-      key: 'in_progress',
+      key: 'under_review',
       label: 'Verification In-Progress',
       description: 'Agent is verifying uploaded papers and matching records.',
-      time: getStatusTime('in_progress') || getStatusTime('documents_required'),
+      time: getStatusTime('under_review') || getStatusTime('correction_required'),
       isCompleted: ['completed', 'rejected'].includes(request.status),
-      isActive: ['in_progress', 'documents_required'].includes(request.status)
+      isActive: ['under_review', 'correction_required'].includes(request.status)
     },
     {
       key: 'completed',
@@ -186,7 +188,7 @@ export default function RequestTrack() {
           iconColor: "text-indigo-500",
           iconBg: "bg-indigo-500/10"
         };
-      case 'documents_required':
+      case 'correction_required':
         return {
           title: "Action Required: Re-upload Documents",
           desc: "The assigned agent has identified issues with one or more uploaded files. Open Request Details and upload a clearer copy.",
@@ -194,7 +196,7 @@ export default function RequestTrack() {
           iconColor: "text-red-600",
           iconBg: "bg-red-600/10"
         };
-      case 'in_progress':
+      case 'under_review':
         return {
           title: "Physical Verification Stage",
           desc: "The assigned agent is processing the application. Timelines can vary based on service workload.",

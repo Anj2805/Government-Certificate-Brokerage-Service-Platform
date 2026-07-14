@@ -8,6 +8,8 @@ const { generateRequestNumber } = require('../../common/utils/request-number.uti
 const Document = require('../documents/document.model');
 const Service = require('../services/service.model');
 const User = require('../users/user.model');
+const { toSafeUser } = require('../users/user.dto');
+const Payment = require('../payments/payment.model');
 const requestRepository = require('./request.repository');
 const {
   assertTransitionAllowed,
@@ -158,10 +160,20 @@ const buildListQuery = (query, user, scope) => {
 
   if (query.timeFilter) {
     const now = new Date();
-    if (query.timeFilter === 'Last 30 Days') {
+    if (query.timeFilter === 'Last 7 Days') {
+      dbQuery.createdAt = { $gte: new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000) };
+    } else if (query.timeFilter === 'Last 30 Days') {
       dbQuery.createdAt = { $gte: new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000) };
     } else if (query.timeFilter === 'Last 6 Months') {
       dbQuery.createdAt = { $gte: new Date(now.getTime() - 180 * 24 * 60 * 60 * 1000) };
+    }
+  }
+
+  if (query.agent) {
+    if (query.agent === 'Unassigned') {
+      dbQuery.assignedAgent = { $exists: false };
+    } else if (query.agent !== 'All') {
+      dbQuery.assignedAgent = query.agent;
     }
   }
 
@@ -170,7 +182,23 @@ const buildListQuery = (query, user, scope) => {
 
 const createRequest = async (payload, user, reqId) => {
   const service = await ensureActiveService(payload.serviceId);
+  const citizenDoc = await User.findById(user.id);
+
+  if (service.requiresIdVerification && citizenDoc.idProofStatus !== 'verified') {
+    throw new ApiError(httpStatus.FORBIDDEN, 'This is a high-security service. You must verify your ID proof in your profile before applying.');
+  }
+
   await ensureDocumentsAccessible({ documentIds: payload.documents, userId: user.id });
+
+  const existingActiveRequest = await requestRepository.findOne({
+    citizen: user.id,
+    service: service.id,
+    status: { $nin: [RequestStatus.REJECTED, RequestStatus.COMPLETED, RequestStatus.CANCELLED] }
+  });
+
+  if (existingActiveRequest) {
+    throw new ApiError(httpStatus.CONFLICT, 'You already have an active application for this service.');
+  }
 
   const initialStatus = payload.status || RequestStatus.DRAFT;
   const now = new Date();
@@ -186,11 +214,26 @@ const createRequest = async (payload, user, reqId) => {
       serviceCharge: service.serviceCharge,
       requiredDocuments: service.requiredDocuments || [],
     },
+    applicantSnapshot: {
+      firstName: citizenDoc.firstName,
+      lastName: citizenDoc.lastName,
+      email: citizenDoc.email,
+      phone: citizenDoc.phone || '',
+      address: citizenDoc.address || '',
+      city: citizenDoc.city || '',
+      state: citizenDoc.state || '',
+      postalCode: citizenDoc.postalCode || '',
+    },
     status: initialStatus,
     applicationData: payload.applicationData || {},
     notes: payload.notes,
     documents: payload.documents || [],
     submittedAt: initialStatus === RequestStatus.SUBMITTED ? now : undefined,
+    paymentStatus: service.serviceCharge > 0 ? 'COD_DUE' : 'NOT_REQUIRED',
+    paymentMethod: service.serviceCharge > 0 ? 'CASH_ON_DELIVERY' : undefined,
+    deliveryStatus: 'PENDING_VERIFICATION',
+    deliveryAddress: payload.deliveryAddress || {},
+    deliveryDeclarationAccepted: payload.deliveryDeclarationAccepted || false,
     statusHistory: [
       {
         fromStatus: undefined,
@@ -221,13 +264,15 @@ const updateDraft = async (requestId, payload, user, reqId) => {
   if (!request) throw new ApiError(httpStatus.NOT_FOUND, 'Request not found');
   ensureRequestAccess(request, user);
 
-  if (request.status !== RequestStatus.DRAFT && request.status !== RequestStatus.DOCUMENTS_REQUIRED) {
+  if (request.status !== RequestStatus.DRAFT && request.status !== RequestStatus.CORRECTION_REQUIRED) {
     throw new ApiError(httpStatus.BAD_REQUEST, 'Cannot update application in current status');
   }
 
   // Explicit allowlisting
   if (payload.applicationData) request.applicationData = payload.applicationData;
   if (payload.notes !== undefined) request.notes = payload.notes;
+  if (payload.deliveryAddress) request.deliveryAddress = payload.deliveryAddress;
+  if (payload.deliveryDeclarationAccepted !== undefined) request.deliveryDeclarationAccepted = payload.deliveryDeclarationAccepted;
 
   if (payload.documents) {
     await ensureDocumentsAccessible({ documentIds: payload.documents, userId: user.id });
@@ -261,9 +306,9 @@ const listRequests = async ({ query, user, scope }) => {
 const getRequestDetails = async (requestId, user) => {
   const request = await requestRepository.findById(requestId)
     .populate('service', 'name category requiredDocuments estimatedProcessingDays serviceCharge')
-    .populate('citizen', 'firstName lastName email role')
+    .populate('citizen', 'firstName lastName email role phone address city state postalCode')
     .populate('assignedAgent', 'firstName lastName email role')
-    .populate('documents', 'title documentType originalName filename mimeType size status createdAt');
+    .populate('documents', 'title documentType originalName filename mimeType size status createdAt uploadedBy ownerUser');
 
   if (!request) {
     throw new ApiError(httpStatus.NOT_FOUND, 'Request not found');
@@ -274,7 +319,7 @@ const getRequestDetails = async (requestId, user) => {
   return request;
 };
 
-const submitRequest = async (requestId, user, reason, reqId) => {
+const submitRequest = async (requestId, user, payload, reqId) => {
   const request = await requestRepository.findById(requestId);
 
   if (!request) {
@@ -289,7 +334,34 @@ const submitRequest = async (requestId, user, reason, reqId) => {
     request.requestNumber = await generateRequestNumber(new Date());
   }
 
-  transitionRequest(request, RequestStatus.SUBMITTED, user, reason || 'Application submitted');
+  const serviceCharge = request.serviceSnapshot?.serviceCharge || 0;
+  
+  if (serviceCharge > 0) {
+    if (!request.deliveryDeclarationAccepted) {
+      throw new ApiError(httpStatus.BAD_REQUEST, 'You must accept the secure delivery declaration to submit a paid request');
+    }
+    request.paymentStatus = 'COD_DUE';
+    request.paymentMethod = 'CASH_ON_DELIVERY';
+    
+    // Create payment record
+    const payment = await Payment.create({
+      request: request._id,
+      citizen: user.id,
+      service: request.service,
+      paymentType: 'CASH_ON_DELIVERY',
+      paymentMethod: 'CASH',
+      status: 'COD_DUE',
+      amountDue: serviceCharge,
+      amountPaid: 0,
+      currency: 'INR',
+    });
+    
+    request.payment = payment._id;
+  } else {
+    request.paymentStatus = 'NOT_REQUIRED';
+  }
+
+  transitionRequest(request, RequestStatus.SUBMITTED, user, payload.reason || 'Application submitted');
 
   const savedRequest = await requestRepository.save(request);
   const eventId = savedRequest.statusHistory.length - 1;
@@ -302,6 +374,55 @@ const submitRequest = async (requestId, user, reason, reqId) => {
   });
 
   logger.info({ audit: true, eventType: 'APPLICATION_SUBMITTED', requestId: reqId, actorId: user.id, role: user.role, applicationNumber: savedRequest.requestNumber }, 'Application submitted');
+
+  return savedRequest;
+};
+
+const recordPayment = async (requestId, user, payload, reqId) => {
+  const request = await requestRepository.findById(requestId);
+  
+  if (!request) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'Request not found');
+  }
+
+  if (request.paymentStatus !== 'DUE') {
+    throw new ApiError(httpStatus.BAD_REQUEST, `Cannot record payment. Current payment status is ${request.paymentStatus}`);
+  }
+
+  if (!request.payment) {
+    throw new ApiError(httpStatus.INTERNAL_SERVER_ERROR, 'Payment record not found for this request');
+  }
+
+  const payment = await Payment.findById(request.payment);
+  if (!payment) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'Payment record not found');
+  }
+
+  payment.status = 'PAID';
+  payment.amountPaid = payload.amountPaid;
+  payment.receiptNumber = payload.receiptNumber;
+  payment.collectionMethod = payload.collectionMethod;
+  payment.notes = payload.notes;
+  payment.collectedBy = user.id;
+  payment.collectedAt = new Date();
+  
+  await payment.save();
+
+  request.paymentStatus = 'PAID';
+  const savedRequest = await requestRepository.save(request);
+
+  // Send notification to citizen
+  const notificationService = require('../notifications/notification.service');
+  const NotificationType = require('../../common/enums/notification-type.enum');
+  await notificationService.createNotification({
+    recipientId: request.citizen,
+    type: NotificationType.INFO,
+    title: 'Payment Received Successfully',
+    message: `₹${payload.amountPaid} has been recorded for request ${request.requestNumber}. Receipt: ${payload.receiptNumber}.`,
+    eventId: request._id.toString(),
+  });
+
+  logger.info({ audit: true, eventType: 'PAYMENT_RECORDED', requestId: reqId, actorId: user.id, role: user.role, applicationNumber: request.requestNumber }, 'Offline payment recorded');
 
   return savedRequest;
 };
@@ -389,12 +510,12 @@ const reassignAgent = async (requestId, agentId, adminUser, reason, reqId) => {
   return savedRequest;
 };
 
-const startProcessing = async (requestId, user, reqId) => {
+const startProcessing = async (requestId, user, reason, reqId) => {
   const request = await requestRepository.findById(requestId);
   if (!request) throw new ApiError(httpStatus.NOT_FOUND, 'Request not found');
   ensureRequestAccess(request, user);
 
-  transitionRequest(request, RequestStatus.IN_PROGRESS, user, 'Agent started processing');
+  transitionRequest(request, RequestStatus.UNDER_REVIEW, user, reason || 'Agent started processing');
 
   const savedRequest = await requestRepository.save(request);
 
@@ -402,7 +523,8 @@ const startProcessing = async (requestId, user, reqId) => {
     recipientId: savedRequest.citizen,
     requestId: savedRequest._id,
     type: NotificationType.REQUEST_IN_PROGRESS,
-    eventId: savedRequest.statusHistory.length - 1
+    eventId: savedRequest.statusHistory.length - 1,
+    message: reason ? `Work has started on your service request. Agent's Note: ${reason}` : undefined
   });
 
   logger.info({ audit: true, eventType: 'APPLICATION_PROCESSING_STARTED', requestId: reqId, actorId: user.id, applicationNumber: savedRequest.requestNumber }, 'Application processing started');
@@ -414,7 +536,7 @@ const requestCorrection = async (requestId, user, reason, reqId) => {
   if (!request) throw new ApiError(httpStatus.NOT_FOUND, 'Request not found');
   ensureRequestAccess(request, user);
 
-  transitionRequest(request, RequestStatus.DOCUMENTS_REQUIRED, user, reason);
+  transitionRequest(request, RequestStatus.CORRECTION_REQUIRED, user, reason);
 
   const savedRequest = await requestRepository.save(request);
 
@@ -422,7 +544,8 @@ const requestCorrection = async (requestId, user, reason, reqId) => {
     recipientId: savedRequest.citizen,
     requestId: savedRequest._id,
     type: NotificationType.DOCUMENTS_REQUIRED,
-    eventId: savedRequest.statusHistory.length - 1
+    eventId: savedRequest.statusHistory.length - 1,
+    message: reason ? `Additional documents are required to continue processing your service request. Agent's Note: ${reason}` : undefined
   });
 
   logger.info({ audit: true, eventType: 'APPLICATION_CORRECTION_REQUESTED', requestId: reqId, actorId: user.id, applicationNumber: savedRequest.requestNumber }, 'Application correction requested');
@@ -443,22 +566,105 @@ const approveRequest = async (requestId, user, reason, reqId) => {
   });
 
   for (const docType of requiredDocs) {
-    const doc = activeDocuments.find(d => d.documentType === docType);
-    if (!doc) {
-      throw new ApiError(httpStatus.CONFLICT, `Cannot approve: Required document missing (${docType})`);
-    }
-    if (doc.status !== DocumentStatus.ACCEPTED) {
-      throw new ApiError(httpStatus.CONFLICT, `Cannot approve: Required document ${docType} is not accepted (current status: ${doc.status})`);
+    const acceptedDoc = activeDocuments.find(
+      d => d.documentType.toLowerCase() === docType.toLowerCase() && d.status === DocumentStatus.ACCEPTED
+    );
+    if (!acceptedDoc) {
+      const anyDoc = activeDocuments.find(d => d.documentType.toLowerCase() === docType.toLowerCase());
+      if (!anyDoc) {
+        throw new ApiError(httpStatus.CONFLICT, `Cannot approve: Required document missing (${docType})`);
+      } else {
+        throw new ApiError(httpStatus.CONFLICT, `Cannot approve: Required document ${docType} is not accepted (current status: ${anyDoc.status})`);
+      }
     }
   }
 
-  transitionRequest(request, RequestStatus.COMPLETED, user, reason || 'Application approved');
+  transitionRequest(request, RequestStatus.APPROVED, user, reason || 'Application approved');
+  request.deliveryStatus = 'READY_FOR_DISPATCH';
 
   const savedRequest = await requestRepository.save(request);
 
-  // Phase 8: Issue certificate idempotently
+  // Phase 8: Issue certificate idempotently (Wait until delivery is verified to complete the request)
   const certificateService = require('../certificates/certificate.service');
   await certificateService.issueCertificate(savedRequest._id, reqId);
+
+  await notificationService.createRequestNotification({
+    recipientId: savedRequest.citizen,
+    requestId: savedRequest._id,
+    type: NotificationType.INFO,
+    eventId: savedRequest.statusHistory.length - 1,
+    message: reason ? `Your application has been approved. Agent's Note: ${reason}` : 'Your application has been approved.'
+  });
+
+  logger.info({ audit: true, eventType: 'APPLICATION_APPROVED', requestId: reqId, actorId: user.id, applicationNumber: savedRequest.requestNumber }, 'Application approved, ready for dispatch');
+  return savedRequest;
+};
+
+const dispatchDelivery = async (requestId, user, reqId) => {
+  const request = await requestRepository.findById(requestId);
+  if (!request) throw new ApiError(httpStatus.NOT_FOUND, 'Request not found');
+  ensureRequestAccess(request, user);
+
+  if (request.status !== RequestStatus.APPROVED) {
+    throw new ApiError(httpStatus.BAD_REQUEST, 'Only approved requests can be dispatched');
+  }
+
+  request.deliveryStatus = 'DISPATCHED';
+  request.trackingId = `SSDEL-${new Date().getFullYear()}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+
+  const savedRequest = await requestRepository.save(request);
+
+  await notificationService.createNotification({
+    recipientId: savedRequest.citizen,
+    type: NotificationType.INFO,
+    title: 'Your SevaSetu Document Has Been Dispatched',
+    message: `Your document for request ${savedRequest.requestNumber} has been dispatched. Tracking ID: ${savedRequest.trackingId}. The requested document will be handed over only to the verified applicant.`,
+    eventId: savedRequest._id.toString(),
+  });
+
+  logger.info({ audit: true, eventType: 'DELIVERY_DISPATCHED', requestId: reqId, actorId: user.id, trackingId: savedRequest.trackingId }, 'Delivery dispatched');
+  return savedRequest;
+};
+
+const verifyDelivery = async (requestId, user, payload, reqId) => {
+  const request = await requestRepository.findById(requestId);
+  if (!request) throw new ApiError(httpStatus.NOT_FOUND, 'Request not found');
+  ensureRequestAccess(request, user);
+
+  if (!['DISPATCHED', 'OUT_FOR_DELIVERY'].includes(request.deliveryStatus)) {
+    throw new ApiError(httpStatus.BAD_REQUEST, `Cannot verify delivery in current status: ${request.deliveryStatus}`);
+  }
+
+  if (payload.verificationResult !== 'PASSED') {
+    request.deliveryStatus = payload.verificationResult === 'RECIPIENT_NOT_PRESENT' ? 'DELIVERY_ATTEMPTED' : 'FAILED';
+    const savedRequest = await requestRepository.save(request);
+    return savedRequest;
+  }
+
+  // Verification passed
+  if (request.paymentStatus === 'COD_DUE') {
+    if (!payload.codCollected) {
+      throw new ApiError(httpStatus.BAD_REQUEST, 'COD payment must be collected before handover for paid services');
+    }
+    request.paymentStatus = 'PAID';
+    
+    if (request.payment) {
+      const Payment = require('../payments/payment.model');
+      const payment = await Payment.findById(request.payment);
+      if (payment) {
+        payment.status = 'PAID';
+        payment.amountPaid = request.serviceSnapshot?.serviceCharge || 0;
+        payment.collectedBy = user.id;
+        payment.collectedAt = new Date();
+        await payment.save();
+      }
+    }
+  }
+
+  request.deliveryStatus = 'DELIVERED';
+  transitionRequest(request, RequestStatus.COMPLETED, user, 'Document delivered and verified successfully');
+
+  const savedRequest = await requestRepository.save(request);
 
   await notificationService.createRequestNotification({
     recipientId: savedRequest.citizen,
@@ -467,7 +673,7 @@ const approveRequest = async (requestId, user, reason, reqId) => {
     eventId: savedRequest.statusHistory.length - 1
   });
 
-  logger.info({ audit: true, eventType: 'APPLICATION_APPROVED', requestId: reqId, actorId: user.id, applicationNumber: savedRequest.requestNumber }, 'Application approved');
+  logger.info({ audit: true, eventType: 'DELIVERY_VERIFIED', requestId: reqId, actorId: user.id, applicationNumber: savedRequest.requestNumber }, 'Delivery verified and document handed over');
   return savedRequest;
 };
 
@@ -484,7 +690,8 @@ const rejectRequest = async (requestId, user, reason, reqId) => {
     recipientId: savedRequest.citizen,
     requestId: savedRequest._id,
     type: NotificationType.REQUEST_REJECTED,
-    eventId: savedRequest.statusHistory.length - 1
+    eventId: savedRequest.statusHistory.length - 1,
+    message: reason ? `Your service request has been rejected. Reason: ${reason}` : undefined
   });
 
   logger.info({ audit: true, eventType: 'APPLICATION_REJECTED', requestId: reqId, actorId: user.id, applicationNumber: savedRequest.requestNumber }, 'Application rejected');
@@ -496,7 +703,7 @@ const resubmitRequest = async (requestId, user, reason, reqId) => {
   if (!request) throw new ApiError(httpStatus.NOT_FOUND, 'Request not found');
   ensureRequestAccess(request, user);
 
-  transitionRequest(request, RequestStatus.IN_PROGRESS, user, reason || 'Application resubmitted by citizen');
+  transitionRequest(request, RequestStatus.RESUBMITTED, user, reason || 'Application resubmitted by citizen');
 
   const savedRequest = await requestRepository.save(request);
 
@@ -527,8 +734,8 @@ const attachDocument = async (requestId, documentId, user) => {
     RequestStatus.DRAFT,
     RequestStatus.SUBMITTED,
     RequestStatus.ASSIGNED,
-    RequestStatus.IN_PROGRESS,
-    RequestStatus.DOCUMENTS_REQUIRED,
+    RequestStatus.UNDER_REVIEW,
+    RequestStatus.CORRECTION_REQUIRED,
   ];
 
   if (!validStatuses.includes(request.status)) {
@@ -549,6 +756,23 @@ const attachDocument = async (requestId, documentId, user) => {
   }
 
   request.documents.push(documentId);
+  
+  if (request.status === RequestStatus.CORRECTION_REQUIRED) {
+    transitionRequest(request, RequestStatus.UNDER_REVIEW, user, 'Citizen re-uploaded document');
+    
+    // Notify agent if assigned
+    if (request.assignedAgent) {
+      await notificationService.createRequestNotification({
+        recipientId: request.assignedAgent,
+        requestId: request._id,
+        type: NotificationType.INFO,
+        eventId: request.statusHistory.length - 1,
+        title: 'Document Re-uploaded',
+        message: `Citizen has re-uploaded a document for Request #${request.requestNumber}. Please review.`
+      });
+    }
+  }
+  
   await requestRepository.save(request);
 
   document.request = requestId;
@@ -572,5 +796,8 @@ module.exports = {
   approveRequest,
   rejectRequest,
   getRequestsSummary,
-  attachDocument,
+  recordPayment,
+  dispatchDelivery,
+  verifyDelivery,
+  attachDocument
 };

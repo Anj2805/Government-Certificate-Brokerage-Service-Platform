@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { adminApi } from '../../api/adminApi';
+import toast from 'react-hot-toast';
 
 export default function DeadLetterJobs() {
   const [jobs, setJobs] = useState([]);
@@ -19,7 +20,7 @@ export default function DeadLetterJobs() {
       setJobs(response.data?.jobs || []);
     } catch (err) {
       console.error(err);
-      alert('Failed to load dead-letter jobs');
+      toast.error('Failed to load dead-letter jobs');
     } finally {
       setIsLoading(false);
     }
@@ -30,11 +31,11 @@ export default function DeadLetterJobs() {
     setIsReplaying(true);
     try {
       await adminApi.replayDeadLetter(jobId);
-      alert('Job successfully queued for replay');
+      toast.success('Job successfully queued for replay');
       fetchJobs();
       setShowDetailsModal(false);
     } catch (err) {
-      alert(err?.response?.data?.message || 'Failed to replay job');
+      toast.error(err?.response?.data?.message || 'Failed to replay job');
     } finally {
       setIsReplaying(false);
     }
@@ -46,7 +47,7 @@ export default function DeadLetterJobs() {
       setSelectedJob(response.data?.job || response.data);
       setShowDetailsModal(true);
     } catch (err) {
-      alert('Failed to load job details');
+      toast.error('Failed to load job details');
     }
   };
   return (
@@ -54,21 +55,22 @@ export default function DeadLetterJobs() {
       <div className="max-w-[1344px] w-full mx-auto px-6 py-8 flex-1 space-y-8">
         
         {/* Title Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div>
-            <h1 className="text-[28px] font-extrabold text-[#0f294a] tracking-tight">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-gradient-to-r from-red-700 to-red-900 rounded-3xl p-8 text-white shadow-xl relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-64 h-64 bg-white opacity-5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/3"></div>
+          <div className="relative z-10">
+            <h1 className="text-3xl font-extrabold tracking-tight">
               Dead-Letter Queue Management
             </h1>
-            <p className="text-[14.5px] text-gray-500 font-semibold mt-0.5">
+            <p className="text-red-100 font-medium mt-2 max-w-xl text-sm leading-relaxed">
               Review and replay background jobs that failed to process.
             </p>
           </div>
           
           <button
             onClick={fetchJobs}
-            className="h-10 px-4 rounded-lg bg-gray-100 hover:bg-gray-200 text-[13px] font-bold text-gray-700 transition-colors flex items-center gap-2"
+            className="relative z-10 h-12 px-6 rounded-xl bg-white text-red-800 text-[14px] font-bold shadow-lg hover:shadow-xl hover:-translate-y-0.5 hover:bg-red-50 transition-all duration-300 flex items-center gap-2 group"
           >
-            <svg style={{ width: '16px', height: '16px' }} fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+            <svg style={{ width: '18px', height: '18px' }} className="transition-transform group-hover:rotate-180" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
               <path d="M23 4v6h-6M1 20v-6h6" />
               <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
             </svg>
@@ -102,30 +104,32 @@ export default function DeadLetterJobs() {
                   jobs.map((job) => (
                     <tr key={job._id} className="hover:bg-red-50/30 transition-colors">
                       <td className="px-6 py-4.5 font-bold text-red-600">{job._id.substring(0, 10)}...</td>
-                      <td className="px-6 py-4.5 font-extrabold text-gray-800">{job.type}</td>
+                      <td className="px-6 py-4.5 font-extrabold text-gray-800">{job.jobType}</td>
                       <td className="px-6 py-4.5 text-gray-700">{job.recipientReference || 'N/A'}</td>
                       <td className="px-6 py-4.5 text-gray-500">
                         <span className="inline-flex items-center justify-center bg-gray-100 text-gray-700 font-bold px-2 py-0.5 rounded border border-gray-200">
-                          {job.attempts}
+                          {job.attemptCount}
                         </span>
                       </td>
                       <td className="px-6 py-4.5 font-semibold text-gray-500">
                         {new Date(job.updatedAt).toLocaleString()}
                       </td>
-                      <td className="px-6 py-4.5 text-right shrink-0 space-x-2">
-                        <button
-                          onClick={() => handleViewDetails(job._id)}
-                          className="h-8 px-3 rounded border border-gray-200 hover:border-gray-400 hover:bg-gray-50 text-[11.5px] font-bold text-gray-700 transition-all"
-                        >
-                          View Details
-                        </button>
-                        <button
-                          onClick={() => handleReplay(job._id)}
-                          disabled={isReplaying}
-                          className="h-8 px-3 rounded border border-red-200 bg-red-50 hover:bg-red-100 text-[11.5px] font-bold text-red-700 transition-all disabled:opacity-50"
-                        >
-                          Replay
-                        </button>
+                      <td className="px-6 py-4.5 text-right shrink-0 whitespace-nowrap">
+                        <div className="flex items-center justify-end gap-2">
+                          <button
+                            onClick={() => handleViewDetails(job._id)}
+                            className="h-8 px-3 rounded border border-gray-200 hover:border-gray-400 hover:bg-gray-50 text-[11.5px] font-bold text-gray-700 transition-all"
+                          >
+                            View
+                          </button>
+                          <button
+                            onClick={() => handleReplay(job._id)}
+                            disabled={isReplaying}
+                            className="h-8 px-3 rounded border border-red-200 bg-red-50 hover:bg-red-100 text-[11.5px] font-bold text-red-700 transition-all disabled:opacity-50"
+                          >
+                            Replay
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))
@@ -162,7 +166,7 @@ export default function DeadLetterJobs() {
               <div className="grid grid-cols-2 gap-4 text-[13.5px]">
                 <div className="bg-gray-50 p-3 rounded-lg border border-gray-100">
                   <span className="block text-[10px] uppercase font-bold text-gray-400 mb-1">Job Type</span>
-                  <span className="font-extrabold text-gray-800">{selectedJob.type}</span>
+                  <span className="font-extrabold text-gray-800">{selectedJob.jobType}</span>
                 </div>
                 <div className="bg-gray-50 p-3 rounded-lg border border-gray-100">
                   <span className="block text-[10px] uppercase font-bold text-gray-400 mb-1">Status</span>
@@ -170,7 +174,7 @@ export default function DeadLetterJobs() {
                 </div>
                 <div className="bg-gray-50 p-3 rounded-lg border border-gray-100">
                   <span className="block text-[10px] uppercase font-bold text-gray-400 mb-1">Attempts</span>
-                  <span className="font-extrabold text-gray-800">{selectedJob.attempts} / {selectedJob.maxAttempts}</span>
+                  <span className="font-extrabold text-gray-800">{selectedJob.attemptCount} / {selectedJob.maxAttempts}</span>
                 </div>
                 <div className="bg-gray-50 p-3 rounded-lg border border-gray-100">
                   <span className="block text-[10px] uppercase font-bold text-gray-400 mb-1">Last Updated</span>

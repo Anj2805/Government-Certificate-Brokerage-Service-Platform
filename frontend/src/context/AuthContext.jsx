@@ -15,8 +15,6 @@ export function AuthProvider({ children }) {
       setUser(null);
     };
 
-    window.addEventListener('auth-logout', handleLogoutEvent);
-
     const bootstrap = async () => {
       if (!tokenStorage.getAccessToken()) {
         setIsBootstrapping(false);
@@ -25,6 +23,7 @@ export function AuthProvider({ children }) {
 
       try {
         const currentUser = await authApi.getCurrentUser();
+        tokenStorage.setUser(currentUser);
         setUser(currentUser);
       } catch (_error) {
         tokenStorage.clearSession();
@@ -34,15 +33,32 @@ export function AuthProvider({ children }) {
       }
     };
 
+    const handleRefreshEvent = () => {
+      bootstrap();
+    };
+
+    window.addEventListener('auth-logout', handleLogoutEvent);
+    window.addEventListener('auth-refresh', handleRefreshEvent);
+
     bootstrap();
 
     return () => {
       window.removeEventListener('auth-logout', handleLogoutEvent);
+      window.removeEventListener('auth-refresh', handleRefreshEvent);
     };
   }, []);
 
   const login = useCallback(async (payload) => {
-    const session = await authApi.login(payload);
+    const response = await authApi.login(payload);
+    if (response.requiresTwoFactor || response.requiresTwoFactorSetup) {
+      return response;
+    }
+    tokenStorage.setSession(response);
+    setUser(response.user);
+    return response.user;
+  }, []);
+
+  const finalizeLogin = useCallback((session) => {
     tokenStorage.setSession(session);
     setUser(session.user);
     return session.user;
@@ -81,12 +97,13 @@ export function AuthProvider({ children }) {
       isAuthenticated,
       isBootstrapping,
       login,
+      finalizeLogin,
       logout,
       register,
       updateCurrentUser,
       clearSession,
     }),
-    [clearSession, isAuthenticated, isBootstrapping, login, logout, register, updateCurrentUser, user],
+    [clearSession, isAuthenticated, isBootstrapping, login, finalizeLogin, logout, register, updateCurrentUser, user],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
