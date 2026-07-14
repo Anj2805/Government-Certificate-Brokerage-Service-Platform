@@ -16,7 +16,7 @@ To ensure Vercel reliably serves the Vite frontend SPA independently of the Expr
 - **Root Directory**: `./` (Repository Root)
 - **Build Command**: `npm install`
 - **Output Directory**: (Leave blank/default)
-- **Vercel Config**: Driven by `vercel.json` wildcard rewrite to `/api/index.js`.
+- **Vercel Config**: Driven by `vercel.json` wildcard rewrite to `/api`, which invokes the Express serverless function.
 - **Required Env Variables**:
   - `NODE_ENV`: `production`
   - `MONGODB_URI`: Atlas connection string
