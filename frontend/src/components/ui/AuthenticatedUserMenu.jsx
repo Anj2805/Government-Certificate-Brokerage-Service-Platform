@@ -10,6 +10,7 @@ export default function AuthenticatedUserMenu() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [avatarLoadFailed, setAvatarLoadFailed] = useState(false);
   const menuRef = useRef(null);
 
   useEffect(() => {
@@ -22,6 +23,10 @@ export default function AuthenticatedUserMenu() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  useEffect(() => {
+    setAvatarLoadFailed(false);
+  }, [user?.id, user?.profilePhoto, user?.avatar]);
+
   const handleLogout = async () => {
     await logout();
     navigate(PATHS.HOME);
@@ -32,6 +37,12 @@ export default function AuthenticatedUserMenu() {
 
   const initials = (user.firstName?.[0] || '') + (user.lastName?.[0] || '');
   const showDashboard = !(user.role === 'agent' && user.agentStatus === 'pending');
+  const accessToken = tokenStorage.getAccessToken();
+  const profilePhotoUrl = user.profilePhoto && accessToken
+    ? (user.role === 'citizen' ? getCitizenProfilePhotoUrl(accessToken) : getProfilePhotoUrl(accessToken))
+    : null;
+  const avatarSrc = profilePhotoUrl || user.avatar || null;
+  const showAvatar = avatarSrc && !avatarLoadFailed;
 
   return (
     <div className="relative" ref={menuRef}>
@@ -39,10 +50,11 @@ export default function AuthenticatedUserMenu() {
         onClick={() => setMenuOpen(!menuOpen)}
         className="relative focus:outline-none focus:ring-2 focus:ring-[#13448a] rounded-full"
       >
-        {user.avatar || user.profilePhoto ? (
+        {showAvatar ? (
           <img
-            src={user.avatar || (user.role === 'citizen' ? getCitizenProfilePhotoUrl(tokenStorage.getAccessToken()) : getProfilePhotoUrl(tokenStorage.getAccessToken()))}
+            src={avatarSrc}
             alt="User avatar"
+            onError={() => setAvatarLoadFailed(true)}
             className="h-9 w-9 rounded-full object-cover border border-gray-200"
           />
         ) : (
