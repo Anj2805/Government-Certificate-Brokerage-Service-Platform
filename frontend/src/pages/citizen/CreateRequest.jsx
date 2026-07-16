@@ -551,7 +551,6 @@ export default function CreateRequest() {
             <div className="space-y-6">
               <div className="border-b border-gray-100 pb-3">
                 <h2 className="text-[18px] font-extrabold text-gray-800">Step 4: Review Application</h2>
-                <h2 className="text-[18px] font-extrabold text-gray-800">Step 3: Review Application</h2>
                 <p className="text-[13.5px] text-gray-500 font-semibold mt-1">Verify your application details and uploaded documents before final submission.</p>
               </div>
  
